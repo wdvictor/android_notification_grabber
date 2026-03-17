@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
-typedef PlatformBridgeEventHandler = Future<void> Function(String method, Object? arguments);
+typedef PlatformBridgeEventHandler =
+    Future<void> Function(String method, Object? arguments);
 
 class PlatformBridgeDataSource {
   const PlatformBridgeDataSource({MethodChannel? channel})
@@ -16,11 +17,15 @@ class PlatformBridgeDataSource {
       return;
     }
 
-    _channel.setMethodCallHandler((call) => handler(call.method, call.arguments));
+    _channel.setMethodCallHandler(
+      (call) => handler(call.method, call.arguments),
+    );
   }
 
   Future<Map<Object?, Object?>> getAppBootstrap() async {
-    return await _channel.invokeMapMethod<Object?, Object?>('getAppBootstrap') ??
+    return await _channel.invokeMapMethod<Object?, Object?>(
+          'getAppBootstrap',
+        ) ??
         const <Object?, Object?>{};
   }
 
@@ -29,7 +34,9 @@ class PlatformBridgeDataSource {
   }
 
   Future<Map<Object?, Object?>> retryAllOfflineNotifications() async {
-    return await _channel.invokeMapMethod<Object?, Object?>('retryAllOfflineNotifications') ??
+    return await _channel.invokeMapMethod<Object?, Object?>(
+          'retryAllOfflineNotifications',
+        ) ??
         const <Object?, Object?>{};
   }
 
@@ -43,6 +50,10 @@ class PlatformBridgeDataSource {
 
   Future<String> getApiKey() async {
     return await _channel.invokeMethod<String>('getApiKey') ?? '';
+  }
+
+  Future<String> getBackendBaseUrl() async {
+    return await _channel.invokeMethod<String>('getBackendBaseUrl') ?? '';
   }
 
   Future<void> broadcastOfflineNotificationsChanged() {

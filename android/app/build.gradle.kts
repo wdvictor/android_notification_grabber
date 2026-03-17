@@ -7,6 +7,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+fun Properties.readOptional(vararg keys: String): String {
+    for (key in keys) {
+        val value = getProperty(key)?.trim()
+        if (!value.isNullOrEmpty()) {
+            return value
+        }
+    }
+
+    return ""
+}
+
 val envProperties = Properties().apply {
     val envFile = rootProject.file("../.env")
     if (envFile.exists()) {
@@ -14,7 +25,8 @@ val envProperties = Properties().apply {
     }
 }
 
-val xApiKey = envProperties.getProperty("xapikey", "")
+val xApiKey = envProperties.readOptional("X_API_KEY", "xapikey")
+val backendBaseUrl = envProperties.readOptional("BACKEND_BASE_URL", "backendbaseurl")
 
 android {
     namespace = "br.syntax.nebula.notificationsgrabber.notification_grabber"
@@ -45,6 +57,11 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         buildConfigField("String", "X_API_KEY", "\"${xApiKey.replace("\"", "\\\"")}\"")
+        buildConfigField(
+            "String",
+            "BACKEND_BASE_URL",
+            "\"${backendBaseUrl.replace("\"", "\\\"")}\"",
+        )
     }
 
     buildTypes {

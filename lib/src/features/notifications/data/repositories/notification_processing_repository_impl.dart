@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/config/backend_endpoints.dart';
 import '../../domain/entities/offline_notification.dart';
 import '../../domain/entities/retry_results.dart';
 import '../../domain/repositories/notification_processing_repository.dart';
@@ -32,6 +33,7 @@ class NotificationProcessingRepositoryImpl
   final Uuid _uuid;
 
   String? _cachedApiKey;
+  String? _cachedBackendBaseUrl;
 
   @override
   Future<List<OfflineNotification>> getOfflineNotifications() async {
@@ -99,7 +101,9 @@ class NotificationProcessingRepositoryImpl
         ? null
         : await _offlineNotificationStoreDataSource.getById(existingId);
     final attemptedAt = DateTime.now();
+    final endpoints = BackendEndpoints(await _getBackendBaseUrl());
     final delivery = await _notificationDeliveryDataSource.send(
+      endpoint: endpoints.addNotification,
       app: app,
       text: text,
       apiKey: await _getApiKey(),
@@ -122,7 +126,7 @@ class NotificationProcessingRepositoryImpl
       isFinancialNotification: null,
       request: RequestDetailsModel(
         method: 'PUT',
-        url: NotificationDeliveryDataSource.endpoint,
+        url: delivery.requestUrl,
         body: delivery.requestBody,
         attemptedAt: attemptedAt,
       ),
@@ -158,5 +162,16 @@ class NotificationProcessingRepositoryImpl
     final apiKey = await _platformBridgeDataSource.getApiKey();
     _cachedApiKey = apiKey;
     return apiKey;
+  }
+
+  Future<String> _getBackendBaseUrl() async {
+    final cachedBackendBaseUrl = _cachedBackendBaseUrl;
+    if (cachedBackendBaseUrl != null) {
+      return cachedBackendBaseUrl;
+    }
+
+    final backendBaseUrl = await _platformBridgeDataSource.getBackendBaseUrl();
+    _cachedBackendBaseUrl = backendBaseUrl;
+    return backendBaseUrl;
   }
 }

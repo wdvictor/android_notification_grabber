@@ -1,4 +1,4 @@
-# notification_graber
+# notification grabber
 
 A new Flutter project.
 

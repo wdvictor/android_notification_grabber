@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'controllers/app_controller.dart';
-import 'pages/home_page.dart';
-import 'services/platform_bridge.dart';
+import 'src/app/dependency_container.dart';
+import 'src/features/notifications/presentation/controllers/app_controller.dart';
+import 'src/features/notifications/presentation/pages/home_page.dart';
 
 class NotificationGrabberApp extends StatefulWidget {
   const NotificationGrabberApp({super.key, AppController? controller})
@@ -17,7 +17,7 @@ class NotificationGrabberApp extends StatefulWidget {
 
 class _NotificationGrabberAppState extends State<NotificationGrabberApp> {
   late final AppController _controller =
-      widget._controller ?? AppController(const PlatformBridge());
+      widget._controller ?? DependencyContainer.createAppController();
 
   @override
   void initState() {

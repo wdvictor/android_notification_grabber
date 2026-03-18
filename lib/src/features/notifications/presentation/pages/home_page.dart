@@ -80,6 +80,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _retryAll() async {
+    if (widget.controller.isDeletingAll ||
+        widget.controller.isDeletingAnyNotification) {
+      return;
+    }
+
     final result = await widget.controller.retryAllOfflineNotifications();
     if (!mounted) {
       return;
@@ -114,6 +119,97 @@ class _HomePageState extends State<HomePage> {
           'Reenvio concluído: ${result.successCount} sucesso, ${result.failureCount} falha',
         ),
         backgroundColor: const Color(0xFFB45309),
+      ),
+    );
+  }
+
+  Future<void> _deleteAll() async {
+    if (widget.controller.isRetryingAll ||
+        widget.controller.isDeletingAll ||
+        widget.controller.isDeletingAnyNotification ||
+        widget.controller.offlineNotifications.isEmpty) {
+      return;
+    }
+
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Apagar fila offline'),
+          content: const Text(
+            'Todas as notificações em cache serão removidas permanentemente.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C),
+              ),
+              child: const Text('Apagar tudo'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) {
+      return;
+    }
+
+    final deletedCount = await widget.controller
+        .deleteAllOfflineNotifications();
+    if (!mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    if (deletedCount == 0) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Não existem notificações offline para apagar'),
+          backgroundColor: Color(0xFF334155),
+        ),
+      );
+      return;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('$deletedCount notificações removidas do cache'),
+        backgroundColor: const Color(0xFF15803D),
+      ),
+    );
+  }
+
+  Future<void> _deleteNotification(OfflineNotification notification) async {
+    if (widget.controller.isRetryingAll ||
+        widget.controller.isDeletingAll ||
+        widget.controller.isDeletingNotification(notification.id)) {
+      return;
+    }
+
+    final deleted = await widget.controller.deleteOfflineNotification(
+      notification.id,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          deleted
+              ? 'Notificação removida do cache offline'
+              : 'A notificação não estava mais disponível no cache',
+        ),
+        backgroundColor: deleted
+            ? const Color(0xFF15803D)
+            : const Color(0xFF334155),
       ),
     );
   }
@@ -171,7 +267,20 @@ class _HomePageState extends State<HomePage> {
                         child: _HeroPanel(
                           total: widget.controller.offlineNotifications.length,
                           isRetryingAll: widget.controller.isRetryingAll,
-                          onRetryAll: _retryAll,
+                          isDeletingAll: widget.controller.isDeletingAll,
+                          onRetryAll:
+                              widget.controller.isRetryingAll ||
+                                  widget.controller.isDeletingAll ||
+                                  widget.controller.isDeletingAnyNotification
+                              ? null
+                              : _retryAll,
+                          onDeleteAll:
+                              widget.controller.isRetryingAll ||
+                                  widget.controller.isDeletingAll ||
+                                  widget.controller.isDeletingAnyNotification ||
+                                  widget.controller.offlineNotifications.isEmpty
+                              ? null
+                              : _deleteAll,
                         ),
                       ),
                     ),
@@ -258,7 +367,23 @@ class _HomePageState extends State<HomePage> {
                                 widget.controller.offlineNotifications[index];
                             return _OfflineNotificationTile(
                               notification: notification,
-                              onTap: () => _openDetails(notification),
+                              isDeleting:
+                                  widget.controller.isDeletingAll ||
+                                  widget.controller.isDeletingNotification(
+                                    notification.id,
+                                  ),
+                              onTap:
+                                  widget.controller.isDeletingAll ||
+                                      widget.controller.isDeletingNotification(
+                                        notification.id,
+                                      )
+                                  ? null
+                                  : () => _openDetails(notification),
+                              onDelete:
+                                  widget.controller.isRetryingAll ||
+                                      widget.controller.isDeletingAll
+                                  ? null
+                                  : () => _deleteNotification(notification),
                             );
                           },
                           separatorBuilder: (_, _) =>
@@ -280,12 +405,16 @@ class _HeroPanel extends StatelessWidget {
   const _HeroPanel({
     required this.total,
     required this.isRetryingAll,
+    required this.isDeletingAll,
     required this.onRetryAll,
+    required this.onDeleteAll,
   });
 
   final int total;
   final bool isRetryingAll;
-  final Future<void> Function() onRetryAll;
+  final bool isDeletingAll;
+  final Future<void> Function()? onRetryAll;
+  final Future<void> Function()? onDeleteAll;
 
   @override
   Widget build(BuildContext context) {
@@ -345,26 +474,57 @@ class _HeroPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: isRetryingAll ? null : onRetryAll,
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFFFF7ED),
-              foregroundColor: const Color(0xFF9A3412),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            ),
-            icon: isRetryingAll
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF9A3412),
-                    ),
-                  )
-                : const Icon(Icons.sync_rounded),
-            label: Text(
-              isRetryingAll ? 'Reenviando...' : 'Tentar de novo tudo',
-            ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              FilledButton.icon(
+                onPressed: onRetryAll == null ? null : () => onRetryAll!(),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFFFF7ED),
+                  foregroundColor: const Color(0xFF9A3412),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                ),
+                icon: isRetryingAll
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF9A3412),
+                        ),
+                      )
+                    : const Icon(Icons.sync_rounded),
+                label: Text(
+                  isRetryingAll ? 'Reenviando...' : 'Tentar de novo tudo',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onDeleteAll == null ? null : () => onDeleteAll!(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFFFE4E6),
+                  side: const BorderSide(color: Color(0x80FFE4E6)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                ),
+                icon: isDeletingAll
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFFFE4E6),
+                        ),
+                      )
+                    : const Icon(Icons.delete_sweep_rounded),
+                label: Text(isDeletingAll ? 'Apagando...' : 'Apagar tudo'),
+              ),
+            ],
           ),
         ],
       ),
@@ -458,10 +618,14 @@ class _OfflineNotificationTile extends StatelessWidget {
   const _OfflineNotificationTile({
     required this.notification,
     required this.onTap,
+    required this.isDeleting,
+    required this.onDelete,
   });
 
   final OfflineNotification notification;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
+  final bool isDeleting;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -514,18 +678,35 @@ class _OfflineNotificationTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 14),
+                Text(
+                  'Última tentativa: ${formatTimestamp(notification.request.attemptedAt)}',
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Última tentativa: ${formatTimestamp(notification.request.attemptedAt)}',
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 12,
-                        ),
+                    TextButton.icon(
+                      onPressed: isDeleting ? null : onDelete,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFB91C1C),
+                        padding: EdgeInsets.zero,
                       ),
+                      icon: isDeleting
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFB91C1C),
+                              ),
+                            )
+                          : const Icon(Icons.delete_outline_rounded, size: 18),
+                      label: Text(isDeleting ? 'Apagando...' : 'Apagar'),
                     ),
-                    const SizedBox(width: 12),
+                    const Spacer(),
                     const Icon(
                       Icons.arrow_forward_ios_rounded,
                       size: 16,

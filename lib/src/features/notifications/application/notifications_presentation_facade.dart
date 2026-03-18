@@ -3,6 +3,7 @@ import '../domain/entities/app_state_snapshot.dart';
 import '../domain/entities/retry_results.dart';
 import '../domain/repositories/app_bridge_repository.dart';
 import '../domain/repositories/failure_notification_repository.dart';
+import '../domain/repositories/notification_processing_repository.dart';
 
 abstract interface class NotificationsPresentationFacade {
   Stream<String> get selectedNotificationIds;
@@ -13,6 +14,8 @@ abstract interface class NotificationsPresentationFacade {
   Future<bool> requestNotificationPermission();
   Future<RetryAllResult> retryAllOfflineNotifications();
   Future<RetryNotificationResult> retryOfflineNotification(String id);
+  Future<bool> deleteOfflineNotification(String id);
+  Future<int> deleteAllOfflineNotifications();
   Future<void> dispose();
 }
 
@@ -21,13 +24,16 @@ class NotificationsPresentationFacadeImpl
   NotificationsPresentationFacadeImpl({
     required PlatformBridgeDataSource platformBridgeDataSource,
     required AppBridgeRepository appBridgeRepository,
+    required NotificationProcessingRepository notificationProcessingRepository,
     required FailureNotificationRepository failureNotificationRepository,
   }) : _platformBridgeDataSource = platformBridgeDataSource,
        _appBridgeRepository = appBridgeRepository,
+       _notificationProcessingRepository = notificationProcessingRepository,
        _failureNotificationRepository = failureNotificationRepository;
 
   final PlatformBridgeDataSource _platformBridgeDataSource;
   final AppBridgeRepository _appBridgeRepository;
+  final NotificationProcessingRepository _notificationProcessingRepository;
   final FailureNotificationRepository _failureNotificationRepository;
 
   @override
@@ -86,6 +92,16 @@ class NotificationsPresentationFacadeImpl
   @override
   Future<RetryNotificationResult> retryOfflineNotification(String id) {
     return _appBridgeRepository.retryOfflineNotification(id);
+  }
+
+  @override
+  Future<bool> deleteOfflineNotification(String id) {
+    return _notificationProcessingRepository.deleteOfflineNotification(id);
+  }
+
+  @override
+  Future<int> deleteAllOfflineNotifications() {
+    return _notificationProcessingRepository.deleteAllOfflineNotifications();
   }
 
   @override

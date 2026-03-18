@@ -17,8 +17,21 @@ class DependencyContainer {
 
   static AppController createAppController() {
     final platformBridgeDataSource = const PlatformBridgeDataSource();
+    final offlineNotificationStoreDataSource =
+        OfflineNotificationStoreDataSource();
     final localFailureNotificationDataSource =
         LocalFailureNotificationDataSource();
+    final notificationProcessingRepository =
+        NotificationProcessingRepositoryImpl(
+          platformBridgeDataSource: platformBridgeDataSource,
+          offlineNotificationStoreDataSource:
+              offlineNotificationStoreDataSource,
+          notificationDeliveryDataSource: NotificationDeliveryDataSource(),
+          localFailureNotificationDataSource:
+              localFailureNotificationDataSource,
+          uuid: const Uuid(),
+          notifyOfflineNotificationsChanged: () async {},
+        );
 
     final appBridgeRepository = AppBridgeRepositoryImpl(
       platformBridgeDataSource,
@@ -30,6 +43,7 @@ class DependencyContainer {
     final facade = NotificationsPresentationFacadeImpl(
       platformBridgeDataSource: platformBridgeDataSource,
       appBridgeRepository: appBridgeRepository,
+      notificationProcessingRepository: notificationProcessingRepository,
       failureNotificationRepository: failureNotificationRepository,
     );
 

@@ -7,7 +7,8 @@ import '../models/offline_notification_model.dart';
 
 class OfflineNotificationStoreDataSource {
   OfflineNotificationStoreDataSource({SharedPreferencesAsync? preferences})
-    : _preferences = preferences ?? SharedPreferencesAsync(options: _androidOptions);
+    : _preferences =
+          preferences ?? SharedPreferencesAsync(options: _androidOptions);
 
   static const String keyOfflineNotifications = 'offline_notifications';
   static const SharedPreferencesAsyncAndroidOptions _androidOptions =
@@ -33,7 +34,9 @@ class OfflineNotificationStoreDataSource {
       }
 
       final records = decoded
-          .map((value) => value is Map ? Map<Object?, Object?>.from(value) : null)
+          .map(
+            (value) => value is Map ? Map<Object?, Object?>.from(value) : null,
+          )
           .whereType<Map<Object?, Object?>>()
           .map(OfflineNotificationModel.fromMap)
           .toList();
@@ -68,15 +71,34 @@ class OfflineNotificationStoreDataSource {
     await _save(records);
   }
 
-  Future<void> delete(String id) async {
-    final updated = (await getAll()).where((record) => record.id != id).toList();
+  Future<bool> delete(String id) async {
+    final records = await getAll();
+    final updated = records.where((record) => record.id != id).toList();
+    if (updated.length == records.length) {
+      return false;
+    }
+
     await _save(updated);
+    return true;
+  }
+
+  Future<int> deleteAll() async {
+    final records = await getAll();
+    if (records.isEmpty) {
+      return 0;
+    }
+
+    await _save(const []);
+    return records.length;
   }
 
   Future<void> _save(List<OfflineNotificationModel> records) async {
-    records.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    final sortedRecords = records.toList()
+      ..sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
 
-    final payload = jsonEncode(records.map((record) => record.toMap()).toList());
+    final payload = jsonEncode(
+      sortedRecords.map((record) => record.toMap()).toList(),
+    );
     await _preferences.setString(keyOfflineNotifications, payload);
   }
 }

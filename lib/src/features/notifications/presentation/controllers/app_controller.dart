@@ -22,18 +22,26 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
   bool _initialized = false;
   bool _isLoading = true;
   bool _isRetryingAll = false;
+  bool _isDeletingAll = false;
   bool _notificationAccessGranted = false;
   bool _notificationPermissionGranted = true;
   List<OfflineNotification> _offlineNotifications = const [];
+  Set<String> _deletingNotificationIds = const <String>{};
   String? _pendingNavigationTargetId;
   String? _errorMessage;
 
   bool get isLoading => _isLoading;
   bool get isRetryingAll => _isRetryingAll;
+  bool get isDeletingAll => _isDeletingAll;
+  bool get isDeletingAnyNotification => _deletingNotificationIds.isNotEmpty;
   bool get notificationAccessGranted => _notificationAccessGranted;
   bool get notificationPermissionGranted => _notificationPermissionGranted;
   List<OfflineNotification> get offlineNotifications => _offlineNotifications;
   String? get errorMessage => _errorMessage;
+
+  bool isDeletingNotification(String id) {
+    return _deletingNotificationIds.contains(id);
+  }
 
   OfflineNotification? findNotificationById(String id) {
     for (final notification in _offlineNotifications) {
@@ -113,6 +121,37 @@ class AppController extends ChangeNotifier with WidgetsBindingObserver {
     final result = await _facade.retryOfflineNotification(id);
     await refresh();
     return result;
+  }
+
+  Future<bool> deleteOfflineNotification(String id) async {
+    _deletingNotificationIds = {..._deletingNotificationIds, id};
+    notifyListeners();
+
+    try {
+      final deleted = await _facade.deleteOfflineNotification(id);
+      await refresh();
+      return deleted;
+    } finally {
+      _deletingNotificationIds = {
+        for (final currentId in _deletingNotificationIds)
+          if (currentId != id) currentId,
+      };
+      notifyListeners();
+    }
+  }
+
+  Future<int> deleteAllOfflineNotifications() async {
+    _isDeletingAll = true;
+    notifyListeners();
+
+    try {
+      final deletedCount = await _facade.deleteAllOfflineNotifications();
+      await refresh();
+      return deletedCount;
+    } finally {
+      _isDeletingAll = false;
+      notifyListeners();
+    }
   }
 
   void _applySnapshot(AppStateSnapshot snapshot) {

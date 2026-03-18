@@ -19,17 +19,22 @@ class NotificationProcessingRepositoryImpl
     required NotificationDeliveryDataSource notificationDeliveryDataSource,
     required LocalFailureNotificationDataSource
     localFailureNotificationDataSource,
+    Future<void> Function()? notifyOfflineNotificationsChanged,
     Uuid? uuid,
   }) : _platformBridgeDataSource = platformBridgeDataSource,
        _offlineNotificationStoreDataSource = offlineNotificationStoreDataSource,
        _notificationDeliveryDataSource = notificationDeliveryDataSource,
        _localFailureNotificationDataSource = localFailureNotificationDataSource,
+       _notifyOfflineNotificationsChanged =
+           notifyOfflineNotificationsChanged ??
+           platformBridgeDataSource.broadcastOfflineNotificationsChanged,
        _uuid = uuid ?? const Uuid();
 
   final PlatformBridgeDataSource _platformBridgeDataSource;
   final OfflineNotificationStoreDataSource _offlineNotificationStoreDataSource;
   final NotificationDeliveryDataSource _notificationDeliveryDataSource;
   final LocalFailureNotificationDataSource _localFailureNotificationDataSource;
+  final Future<void> Function() _notifyOfflineNotificationsChanged;
   final Uuid _uuid;
 
   String? _cachedApiKey;
@@ -84,6 +89,26 @@ class NotificationProcessingRepositoryImpl
   }
 
   @override
+  Future<bool> deleteOfflineNotification(String id) async {
+    final deleted = await _offlineNotificationStoreDataSource.delete(id);
+    if (deleted) {
+      await _notifyOfflineNotificationsChanged();
+    }
+
+    return deleted;
+  }
+
+  @override
+  Future<int> deleteAllOfflineNotifications() async {
+    final deletedCount = await _offlineNotificationStoreDataSource.deleteAll();
+    if (deletedCount > 0) {
+      await _notifyOfflineNotificationsChanged();
+    }
+
+    return deletedCount;
+  }
+
+  @override
   Future<RetryNotificationResult> processCapturedNotification({
     required String app,
     required String text,
@@ -112,7 +137,7 @@ class NotificationProcessingRepositoryImpl
     if (delivery.statusCode == 201) {
       if (existingId != null) {
         await _offlineNotificationStoreDataSource.delete(existingId);
-        await _platformBridgeDataSource.broadcastOfflineNotificationsChanged();
+        await _notifyOfflineNotificationsChanged();
       }
 
       return const RetryNotificationResult(success: true, record: null);
@@ -141,7 +166,7 @@ class NotificationProcessingRepositoryImpl
     );
 
     await _offlineNotificationStoreDataSource.upsert(record);
-    await _platformBridgeDataSource.broadcastOfflineNotificationsChanged();
+    await _notifyOfflineNotificationsChanged();
 
     if (notifyOnFailure) {
       await _localFailureNotificationDataSource.showFailureNotification(

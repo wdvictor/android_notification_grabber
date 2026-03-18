@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/dependency_container.dart';
 import '../../domain/entities/all_notification.dart';
+import '../../domain/entities/update_notification_result.dart';
 import '../controllers/all_notifications_controller.dart';
 
 class AllNotificationsPage extends StatefulWidget {
@@ -50,12 +51,21 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
     await _controller.applyFilters(searchText: '', filter: FinancialTransactionFilterOption.any);
   }
 
-  void _showUpdatePlaceholder({required AllNotification notification, required bool value}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Atualização para $value de ${notification.app} será implementada depois.'),
-        backgroundColor: const Color(0xFF334155),
-      ),
+  Future<void> _updateNotification({
+    required AllNotification notification,
+    required bool value,
+  }) async {
+    final result = await _controller.updateNotification(
+      id: notification.id,
+      isFinancialTransaction: value,
+    );
+    if (!mounted || result.isSuccess) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _UpdateFailureDialog(result: result),
     );
   }
 
@@ -161,10 +171,11 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
                             final notification = _controller.notifications[index];
                             return _NotificationCard(
                               notification: notification,
+                              isUpdating: _controller.isUpdatingNotification(notification.id),
                               onMarkTrue: () =>
-                                  _showUpdatePlaceholder(notification: notification, value: true),
+                                  _updateNotification(notification: notification, value: true),
                               onMarkFalse: () =>
-                                  _showUpdatePlaceholder(notification: notification, value: false),
+                                  _updateNotification(notification: notification, value: false),
                             );
                           },
                           separatorBuilder: (_, _) => const SizedBox(height: 14),
@@ -442,13 +453,15 @@ class _ErrorCard extends StatelessWidget {
 class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.notification,
+    required this.isUpdating,
     required this.onMarkTrue,
     required this.onMarkFalse,
   });
 
   final AllNotification notification;
-  final VoidCallback onMarkTrue;
-  final VoidCallback onMarkFalse;
+  final bool isUpdating;
+  final Future<void> Function() onMarkTrue;
+  final Future<void> Function() onMarkFalse;
 
   @override
   Widget build(BuildContext context) {
@@ -497,29 +510,122 @@ class _NotificationCard extends StatelessWidget {
             runSpacing: 12,
             children: [
               FilledButton.icon(
-                onPressed: onMarkTrue,
+                onPressed: isUpdating
+                    ? null
+                    : () {
+                        onMarkTrue();
+                      },
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF15803D),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                 ),
                 icon: const Icon(Icons.check_circle_outline_rounded),
-                label: const Text('Atualizar para true'),
+                label: const Text('Confirmar transação financeira'),
               ),
               OutlinedButton.icon(
-                onPressed: onMarkFalse,
+                onPressed: isUpdating
+                    ? null
+                    : () {
+                        onMarkFalse();
+                      },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFB91C1C),
                   side: const BorderSide(color: Color(0xFFFECACA)),
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                 ),
                 icon: const Icon(Icons.remove_circle_outline_rounded),
-                label: const Text('Atualizar para false'),
+                label: const Text('Não é transação financeira'),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _UpdateFailureDialog extends StatelessWidget {
+  const _UpdateFailureDialog({required this.result});
+
+  final UpdateNotificationResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Falha ao atualizar notificação'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'A requisição para `update_notification` falhou.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF475569), height: 1.5),
+              ),
+              const SizedBox(height: 20),
+              _DialogSection(
+                title: 'Requisição',
+                lines: [
+                  'Método: ${result.requestMethod}',
+                  'URL: ${result.requestUrl}',
+                  'Body:',
+                  result.requestBody,
+                ],
+              ),
+              const SizedBox(height: 16),
+              _DialogSection(
+                title: 'Resposta',
+                lines: [
+                  'Status: ${result.responseStatusCode?.toString() ?? 'sem status'}',
+                  if (result.responseErrorMessage != null &&
+                      result.responseErrorMessage!.trim().isNotEmpty)
+                    'Erro: ${result.responseErrorMessage}',
+                  'Body:',
+                  (result.responseBody == null || result.responseBody!.isEmpty)
+                      ? 'sem body'
+                      : result.responseBody!,
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar')),
+      ],
+    );
+  }
+}
+
+class _DialogSection extends StatelessWidget {
+  const _DialogSection({required this.title, required this.lines});
+
+  final String title;
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: const Color(0xFF0F172A),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SelectableText(
+          lines.join('\n'),
+          style: const TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.5),
+        ),
+      ],
     );
   }
 }

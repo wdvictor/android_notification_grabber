@@ -9,30 +9,36 @@ void main() {
   group('AllNotificationsRemoteDataSource', () {
     late HttpServer server;
     late _CapturedRequest capturedRequest;
+    late int responseStatusCode;
+    late String responseBody;
 
     setUp(() async {
       capturedRequest = _CapturedRequest.empty();
+      responseStatusCode = 200;
+      responseBody = jsonEncode(<Map<String, Object?>>[
+        <String, Object?>{
+          'id': 'notification-1',
+          'app': 'Banco XPTO',
+          'text': 'PIX recebido com sucesso',
+          'is_financial_transaction': true,
+        },
+      ]);
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
+        final requestBody = await utf8.decoder.bind(request).join();
         capturedRequest = _CapturedRequest(
           method: request.method,
+          path: request.uri.path,
           apiKey: request.headers.value('X-API-Key'),
           queryParameters: Map<String, String>.from(
             request.uri.queryParameters,
           ),
+          body: requestBody,
         );
 
-        request.response.statusCode = 200;
+        request.response.statusCode = responseStatusCode;
         request.response.headers.contentType = ContentType.json;
-        request.response.write(
-          jsonEncode(<Map<String, Object?>>[
-            <String, Object?>{
-              'app': 'Banco XPTO',
-              'text': 'PIX recebido com sucesso',
-              'is_financial_transaction': true,
-            },
-          ]),
-        );
+        request.response.write(responseBody);
         await request.response.close();
       });
     });
@@ -62,7 +68,9 @@ void main() {
         'isft': 'false',
         'q': 'pix',
       });
+      expect(capturedRequest.path, '/get_all_notifications');
       expect(notifications.single.app, 'Banco XPTO');
+      expect(notifications.single.id, 'notification-1');
       expect(notifications.single.isFinancialTransaction, isTrue);
     });
 
@@ -81,22 +89,82 @@ void main() {
         expect(capturedRequest.queryParameters, <String, String>{'p': '1'});
       },
     );
+
+    test(
+      'envia PUT para update_notification com body json e trata 200 como sucesso',
+      () async {
+        final dataSource = AllNotificationsRemoteDataSource();
+        responseBody = '{"ok":true}';
+
+        final result = await dataSource.update(
+          endpoint:
+              'http://${server.address.address}:${server.port}/update_notification',
+          apiKey: 'secret-key',
+          id: 'notification-9',
+          isFinancialTransaction: false,
+        );
+
+        expect(capturedRequest.method, 'PUT');
+        expect(capturedRequest.path, '/update_notification');
+        expect(capturedRequest.apiKey, 'secret-key');
+        expect(
+          jsonDecode(capturedRequest.body!) as Map<String, Object?>,
+          <String, Object?>{
+            'id': 'notification-9',
+            'is_financial_transaction': false,
+          },
+        );
+        expect(result.responseStatusCode, 200);
+        expect(result.responseErrorMessage, isNull);
+      },
+    );
+
+    test(
+      'mantem dados de request e response quando update_notification falha',
+      () async {
+        final dataSource = AllNotificationsRemoteDataSource();
+        responseStatusCode = 500;
+        responseBody = '{"detail":"failed"}';
+
+        final result = await dataSource.update(
+          endpoint:
+              'http://${server.address.address}:${server.port}/update_notification',
+          apiKey: 'secret-key',
+          id: 'notification-10',
+          isFinancialTransaction: true,
+        );
+
+        expect(result.requestMethod, 'PUT');
+        expect(result.requestUrl, contains('/update_notification'));
+        expect(result.requestBody, contains('"id":"notification-10"'));
+        expect(result.requestBody, contains('"is_financial_transaction":true'));
+        expect(result.responseStatusCode, 500);
+        expect(result.responseBody, '{"detail":"failed"}');
+        expect(result.responseErrorMessage, 'update_notification returned 500');
+      },
+    );
   });
 }
 
 class _CapturedRequest {
   const _CapturedRequest({
     required this.method,
+    required this.path,
     required this.apiKey,
     required this.queryParameters,
+    required this.body,
   });
 
   const _CapturedRequest.empty()
     : method = '',
+      path = '',
       apiKey = null,
-      queryParameters = const <String, String>{};
+      queryParameters = const <String, String>{},
+      body = null;
 
   final String method;
+  final String path;
   final String? apiKey;
   final Map<String, String> queryParameters;
+  final String? body;
 }

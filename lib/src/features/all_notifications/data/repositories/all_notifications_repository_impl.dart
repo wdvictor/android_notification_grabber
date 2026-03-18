@@ -2,6 +2,7 @@ import '../../../../core/config/backend_endpoints.dart';
 import '../../../notifications/data/datasources/platform_bridge_data_source.dart';
 import '../../domain/entities/all_notification.dart';
 import '../../domain/entities/all_notifications_query.dart';
+import '../../domain/entities/update_notification_result.dart';
 import '../../domain/repositories/all_notifications_repository.dart';
 import '../datasources/all_notifications_remote_data_source.dart';
 
@@ -30,6 +31,22 @@ class AllNotificationsRepositoryImpl implements AllNotificationsRepository {
     );
 
     return models.map((model) => model.toEntity()).toList(growable: false);
+  }
+
+  @override
+  Future<UpdateNotificationResult> updateNotification({
+    required String id,
+    required bool isFinancialTransaction,
+  }) async {
+    final endpoints = BackendEndpoints(await _getBackendBaseUrl());
+    final result = await _remoteDataSource.update(
+      endpoint: endpoints.updateNotification,
+      apiKey: await _getApiKey(),
+      id: id,
+      isFinancialTransaction: isFinancialTransaction,
+    );
+
+    return result.toEntity();
   }
 
   Future<String> _getApiKey() async {

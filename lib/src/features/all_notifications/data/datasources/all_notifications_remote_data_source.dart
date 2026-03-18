@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../../domain/entities/all_notifications_query.dart';
 import '../models/all_notification_model.dart';
+import '../models/update_notification_result_model.dart';
 
 class AllNotificationsRemoteDataSource {
   static const Duration _connectTimeout = Duration(milliseconds: 120000);
@@ -67,17 +68,78 @@ class AllNotificationsRemoteDataSource {
     }
   }
 
+  Future<UpdateNotificationResultModel> update({
+    required String endpoint,
+    required String apiKey,
+    required String id,
+    required bool isFinancialTransaction,
+  }) async {
+    final requestBody = jsonEncode(<String, Object?>{
+      'id': id,
+      'is_financial_transaction': isFinancialTransaction,
+    });
+    final endpointUri = _parseEndpoint(endpoint);
+    if (endpointUri == null) {
+      return UpdateNotificationResultModel(
+        notificationId: id,
+        isFinancialTransaction: isFinancialTransaction,
+        requestMethod: 'PUT',
+        requestUrl: endpoint.trim(),
+        requestBody: requestBody,
+        responseErrorMessage: _describeEndpointError(endpoint),
+      );
+    }
+
+    final client = HttpClient()..connectionTimeout = _connectTimeout;
+
+    try {
+      final request = await client.putUrl(endpointUri).timeout(_connectTimeout);
+      request.headers.set(
+        HttpHeaders.contentTypeHeader,
+        'application/json; charset=UTF-8',
+      );
+      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set('X-API-Key', apiKey);
+      request.add(utf8.encode(requestBody));
+
+      final response = await request.close().timeout(_readTimeout);
+      final responseBody = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(_readTimeout);
+
+      return UpdateNotificationResultModel(
+        notificationId: id,
+        isFinancialTransaction: isFinancialTransaction,
+        requestMethod: 'PUT',
+        requestUrl: endpointUri.toString(),
+        requestBody: requestBody,
+        responseStatusCode: response.statusCode,
+        responseBody: responseBody,
+        responseErrorMessage: response.statusCode == 200
+            ? null
+            : 'update_notification returned ${response.statusCode}',
+      );
+    } catch (error) {
+      return UpdateNotificationResultModel(
+        notificationId: id,
+        isFinancialTransaction: isFinancialTransaction,
+        requestMethod: 'PUT',
+        requestUrl: endpointUri.toString(),
+        requestBody: requestBody,
+        responseErrorMessage: _describeError(error),
+      );
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Uri? _buildEndpointUri({
     required String endpoint,
     required AllNotificationsQuery query,
   }) {
-    final normalized = endpoint.trim();
-    if (normalized.isEmpty) {
-      return null;
-    }
-
-    final uri = Uri.tryParse(normalized);
-    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    final uri = _parseEndpoint(endpoint);
+    if (uri == null) {
       return null;
     }
 
@@ -99,6 +161,20 @@ class AllNotificationsRemoteDataSource {
     }
 
     return uri.replace(queryParameters: queryParameters);
+  }
+
+  Uri? _parseEndpoint(String endpoint) {
+    final normalized = endpoint.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+      return null;
+    }
+
+    return uri;
   }
 
   String _describeEndpointError(String endpoint) {

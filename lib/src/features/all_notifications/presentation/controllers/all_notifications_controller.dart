@@ -4,6 +4,7 @@ import '../../application/all_notifications_facade.dart';
 import '../../domain/entities/all_notification.dart';
 import '../../domain/entities/all_notifications_query.dart';
 import '../../domain/entities/paginated_all_notifications.dart';
+import '../../domain/entities/update_notification_result.dart';
 
 enum FinancialTransactionFilterOption {
   any('Todos', null),
@@ -24,6 +25,7 @@ class AllNotificationsController extends ChangeNotifier {
   bool _initialized = false;
   bool _isLoading = false;
   String? _errorMessage;
+  Set<String> _updatingNotificationIds = const <String>{};
   FinancialTransactionFilterOption _selectedFilter =
       FinancialTransactionFilterOption.any;
   PaginatedAllNotifications _page = const PaginatedAllNotifications(
@@ -36,9 +38,14 @@ class AllNotificationsController extends ChangeNotifier {
   int get currentPage => _page.query.page;
   bool get hasPreviousPage => currentPage > 1;
   bool get hasNextPage => _page.hasNextPage;
+  bool get isUpdatingAnyNotification => _updatingNotificationIds.isNotEmpty;
   String get currentSearchText => _page.query.normalizedSearchText ?? '';
   FinancialTransactionFilterOption get selectedFilter => _selectedFilter;
   List<AllNotification> get notifications => _page.items;
+
+  bool isUpdatingNotification(String id) {
+    return _updatingNotificationIds.contains(id);
+  }
 
   Future<void> initialize() async {
     if (_initialized) {
@@ -81,6 +88,50 @@ class AllNotificationsController extends ChangeNotifier {
     }
 
     await _load(_page.query.copyWith(page: currentPage - 1));
+  }
+
+  Future<UpdateNotificationResult> updateNotification({
+    required String id,
+    required bool isFinancialTransaction,
+  }) async {
+    _updatingNotificationIds = {..._updatingNotificationIds, id};
+    notifyListeners();
+
+    try {
+      final result = await _facade.updateNotification(
+        id: id,
+        isFinancialTransaction: isFinancialTransaction,
+      );
+
+      if (result.isSuccess) {
+        _page = PaginatedAllNotifications(
+          query: _page.query,
+          items: _page.items
+              .map((notification) {
+                if (notification.id != id) {
+                  return notification;
+                }
+
+                return AllNotification(
+                  id: notification.id,
+                  app: notification.app,
+                  text: notification.text,
+                  isFinancialTransaction: isFinancialTransaction,
+                );
+              })
+              .toList(growable: false),
+        );
+        notifyListeners();
+      }
+
+      return result;
+    } finally {
+      _updatingNotificationIds = {
+        for (final currentId in _updatingNotificationIds)
+          if (currentId != id) currentId,
+      };
+      notifyListeners();
+    }
   }
 
   Future<void> _load(AllNotificationsQuery query) async {

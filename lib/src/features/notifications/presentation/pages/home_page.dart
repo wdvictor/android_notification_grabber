@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/formatters/text_formatter.dart';
 import '../../domain/entities/offline_notification.dart';
 import '../controllers/app_controller.dart';
+import 'ignored_apps_page.dart';
 import 'notification_details_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -236,12 +237,27 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _openIgnoredApps() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => IgnoredAppsPage(controller: widget.controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         return Scaffold(
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _openIgnoredApps,
+            backgroundColor: const Color(0xFF0E7490),
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.visibility_off_outlined),
+            label: const Text('Apps ignorados'),
+          ),
           body: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(

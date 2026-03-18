@@ -2,12 +2,14 @@ import 'package:uuid/uuid.dart';
 
 import '../features/notifications/application/notifications_background_facade.dart';
 import '../features/notifications/application/notifications_presentation_facade.dart';
+import '../features/notifications/data/datasources/ignored_app_store_data_source.dart';
 import '../features/notifications/data/datasources/local_failure_notification_data_source.dart';
 import '../features/notifications/data/datasources/notification_delivery_data_source.dart';
 import '../features/notifications/data/datasources/offline_notification_store_data_source.dart';
 import '../features/notifications/data/datasources/platform_bridge_data_source.dart';
 import '../features/notifications/data/repositories/app_bridge_repository_impl.dart';
 import '../features/notifications/data/repositories/failure_notification_repository_impl.dart';
+import '../features/notifications/data/repositories/ignored_app_repository_impl.dart';
 import '../features/notifications/data/repositories/notification_processing_repository_impl.dart';
 import '../features/notifications/presentation/controllers/app_controller.dart';
 import 'background_channel_handler.dart';
@@ -19,6 +21,10 @@ class DependencyContainer {
     final platformBridgeDataSource = const PlatformBridgeDataSource();
     final offlineNotificationStoreDataSource =
         OfflineNotificationStoreDataSource();
+    final ignoredAppRepository = IgnoredAppRepositoryImpl(
+      platformBridgeDataSource: platformBridgeDataSource,
+      ignoredAppStoreDataSource: IgnoredAppStoreDataSource(),
+    );
     final localFailureNotificationDataSource =
         LocalFailureNotificationDataSource();
     final notificationProcessingRepository =
@@ -27,6 +33,7 @@ class DependencyContainer {
           offlineNotificationStoreDataSource:
               offlineNotificationStoreDataSource,
           notificationDeliveryDataSource: NotificationDeliveryDataSource(),
+          ignoredAppRepository: ignoredAppRepository,
           localFailureNotificationDataSource:
               localFailureNotificationDataSource,
           uuid: const Uuid(),
@@ -44,6 +51,7 @@ class DependencyContainer {
       platformBridgeDataSource: platformBridgeDataSource,
       appBridgeRepository: appBridgeRepository,
       notificationProcessingRepository: notificationProcessingRepository,
+      ignoredAppRepository: ignoredAppRepository,
       failureNotificationRepository: failureNotificationRepository,
     );
 
@@ -52,12 +60,17 @@ class DependencyContainer {
 
   static BackgroundChannelHandler createBackgroundChannelHandler() {
     final platformBridgeDataSource = const PlatformBridgeDataSource();
+    final ignoredAppRepository = IgnoredAppRepositoryImpl(
+      platformBridgeDataSource: platformBridgeDataSource,
+      ignoredAppStoreDataSource: IgnoredAppStoreDataSource(),
+    );
     final backgroundFacade = NotificationsBackgroundFacadeImpl(
       NotificationProcessingRepositoryImpl(
         platformBridgeDataSource: platformBridgeDataSource,
         offlineNotificationStoreDataSource:
             OfflineNotificationStoreDataSource(),
         notificationDeliveryDataSource: NotificationDeliveryDataSource(),
+        ignoredAppRepository: ignoredAppRepository,
         localFailureNotificationDataSource:
             LocalFailureNotificationDataSource(),
         uuid: const Uuid(),

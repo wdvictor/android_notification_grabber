@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:notification_grabber/app.dart';
 import 'package:notification_grabber/src/features/notifications/application/notifications_presentation_facade.dart';
 import 'package:notification_grabber/src/features/notifications/domain/entities/app_state_snapshot.dart';
+import 'package:notification_grabber/src/features/notifications/domain/entities/installed_app.dart';
 import 'package:notification_grabber/src/features/notifications/domain/entities/offline_notification.dart';
 import 'package:notification_grabber/src/features/notifications/domain/entities/retry_results.dart';
 import 'package:notification_grabber/src/features/notifications/presentation/controllers/app_controller.dart';
@@ -117,6 +118,15 @@ class _FakeNotificationsPresentationFacade
 
   @override
   Future<int> deleteAllOfflineNotifications() async => 0;
+
+  @override
+  Future<List<InstalledApp>> loadInstalledApps() async => const [];
+
+  @override
+  Future<void> addIgnoredApp(String packageName) async {}
+
+  @override
+  Future<void> removeIgnoredApp(String packageName) async {}
 
   @override
   Future<void> dispose() async {}

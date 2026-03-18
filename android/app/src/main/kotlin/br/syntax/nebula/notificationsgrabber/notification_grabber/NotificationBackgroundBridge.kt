@@ -24,7 +24,6 @@ object NotificationBackgroundBridge {
     private const val backgroundReadyTimeoutMs = 30000L
     private const val invocationTimeoutMs = 300000L
     private const val tag = "NotificationBridge"
-    private val ignoredPackageTerms = listOf("whatsapp", "android", "samsung", "google", "sotify")
     private val mainHandler = Handler(Looper.getMainLooper())
 
     val executor: ExecutorService = Executors.newSingleThreadExecutor()
@@ -47,13 +46,7 @@ object NotificationBackgroundBridge {
     private val engineLock = Any()
 
     fun shouldIgnorePackage(context: Context, packageName: String): Boolean {
-        if (packageName == context.packageName) {
-            return true
-        }
-
-        return ignoredPackageTerms.any { term ->
-            packageName.contains(term, ignoreCase = true)
-        }
+        return packageName == context.packageName
     }
 
     fun processCapturedNotification(context: Context, app: String, text: String) {

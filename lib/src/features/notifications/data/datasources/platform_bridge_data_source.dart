@@ -29,6 +29,17 @@ class PlatformBridgeDataSource {
         const <Object?, Object?>{};
   }
 
+  Future<List<Map<Object?, Object?>>> getInstalledApplications() async {
+    final rawList =
+        await _channel.invokeListMethod<Object?>('getInstalledApplications') ??
+        const <Object?>[];
+
+    return rawList
+        .map((value) => value is Map ? Map<Object?, Object?>.from(value) : null)
+        .whereType<Map<Object?, Object?>>()
+        .toList(growable: false);
+  }
+
   Future<void> openNotificationAccessSettings() {
     return _channel.invokeMethod<void>('openNotificationAccessSettings');
   }

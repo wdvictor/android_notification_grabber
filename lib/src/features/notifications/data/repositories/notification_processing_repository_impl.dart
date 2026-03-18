@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/config/backend_endpoints.dart';
 import '../../domain/entities/offline_notification.dart';
 import '../../domain/entities/retry_results.dart';
+import '../../domain/repositories/ignored_app_repository.dart';
 import '../../domain/repositories/notification_processing_repository.dart';
 import '../datasources/local_failure_notification_data_source.dart';
 import '../datasources/notification_delivery_data_source.dart';
@@ -17,6 +18,7 @@ class NotificationProcessingRepositoryImpl
     required OfflineNotificationStoreDataSource
     offlineNotificationStoreDataSource,
     required NotificationDeliveryDataSource notificationDeliveryDataSource,
+    required IgnoredAppRepository ignoredAppRepository,
     required LocalFailureNotificationDataSource
     localFailureNotificationDataSource,
     Future<void> Function()? notifyOfflineNotificationsChanged,
@@ -24,6 +26,7 @@ class NotificationProcessingRepositoryImpl
   }) : _platformBridgeDataSource = platformBridgeDataSource,
        _offlineNotificationStoreDataSource = offlineNotificationStoreDataSource,
        _notificationDeliveryDataSource = notificationDeliveryDataSource,
+       _ignoredAppRepository = ignoredAppRepository,
        _localFailureNotificationDataSource = localFailureNotificationDataSource,
        _notifyOfflineNotificationsChanged =
            notifyOfflineNotificationsChanged ??
@@ -33,6 +36,7 @@ class NotificationProcessingRepositoryImpl
   final PlatformBridgeDataSource _platformBridgeDataSource;
   final OfflineNotificationStoreDataSource _offlineNotificationStoreDataSource;
   final NotificationDeliveryDataSource _notificationDeliveryDataSource;
+  final IgnoredAppRepository _ignoredAppRepository;
   final LocalFailureNotificationDataSource _localFailureNotificationDataSource;
   final Future<void> Function() _notifyOfflineNotificationsChanged;
   final Uuid _uuid;
@@ -122,6 +126,15 @@ class NotificationProcessingRepositoryImpl
     String? existingId,
     required bool notifyOnFailure,
   }) async {
+    if (await _ignoredAppRepository.isIgnoredApp(app)) {
+      if (existingId != null) {
+        await _offlineNotificationStoreDataSource.delete(existingId);
+        await _notifyOfflineNotificationsChanged();
+      }
+
+      return const RetryNotificationResult(success: true, record: null);
+    }
+
     final previousRecord = existingId == null
         ? null
         : await _offlineNotificationStoreDataSource.getById(existingId);

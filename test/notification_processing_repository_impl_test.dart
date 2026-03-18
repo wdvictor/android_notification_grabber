@@ -1,20 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:notification_grabber/src/features/notifications/data/datasources/ignored_app_store_data_source.dart';
 import 'package:notification_grabber/src/features/notifications/data/datasources/local_failure_notification_data_source.dart';
 import 'package:notification_grabber/src/features/notifications/data/datasources/notification_delivery_data_source.dart';
 import 'package:notification_grabber/src/features/notifications/data/datasources/offline_notification_store_data_source.dart';
 import 'package:notification_grabber/src/features/notifications/data/datasources/platform_bridge_data_source.dart';
 import 'package:notification_grabber/src/features/notifications/data/models/delivery_response_model.dart';
 import 'package:notification_grabber/src/features/notifications/data/models/offline_notification_model.dart';
+import 'package:notification_grabber/src/features/notifications/data/repositories/ignored_app_repository_impl.dart';
 import 'package:notification_grabber/src/features/notifications/data/repositories/notification_processing_repository_impl.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_async_platform_interface.dart';
-import 'package:shared_preferences_platform_interface/types.dart';
+
+import 'support/fake_shared_preferences_async_platform.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() {
     SharedPreferencesAsyncPlatform.instance =
-        _FakeSharedPreferencesAsyncPlatform();
+        FakeSharedPreferencesAsyncPlatform();
   });
 
   group('NotificationProcessingRepositoryImpl delete', () {
@@ -27,6 +30,7 @@ void main() {
         platformBridgeDataSource: _FakePlatformBridgeDataSource(),
         offlineNotificationStoreDataSource: store,
         notificationDeliveryDataSource: _FakeNotificationDeliveryDataSource(),
+        ignoredAppRepository: _createIgnoredAppRepository(),
         localFailureNotificationDataSource:
             _FakeLocalFailureNotificationDataSource(),
         notifyOfflineNotificationsChanged: () async {
@@ -52,6 +56,7 @@ void main() {
         platformBridgeDataSource: _FakePlatformBridgeDataSource(),
         offlineNotificationStoreDataSource: store,
         notificationDeliveryDataSource: _FakeNotificationDeliveryDataSource(),
+        ignoredAppRepository: _createIgnoredAppRepository(),
         localFailureNotificationDataSource:
             _FakeLocalFailureNotificationDataSource(),
         notifyOfflineNotificationsChanged: () async {
@@ -67,6 +72,43 @@ void main() {
       expect(notificationsChangedCount, 1);
     });
   });
+
+  group('NotificationProcessingRepositoryImpl process', () {
+    test(
+      'nao envia notificacao recebida por app ignorado para a API',
+      () async {
+        final ignoredAppRepository = _createIgnoredAppRepository();
+        await ignoredAppRepository.addIgnoredApp('com.alpha.bank');
+        final deliveryDataSource = _CountingNotificationDeliveryDataSource();
+        final repository = NotificationProcessingRepositoryImpl(
+          platformBridgeDataSource: _FakePlatformBridgeDataSource(),
+          offlineNotificationStoreDataSource:
+              OfflineNotificationStoreDataSource(),
+          notificationDeliveryDataSource: deliveryDataSource,
+          ignoredAppRepository: ignoredAppRepository,
+          localFailureNotificationDataSource:
+              _FakeLocalFailureNotificationDataSource(),
+        );
+
+        final result = await repository.processCapturedNotification(
+          app: 'com.alpha.bank',
+          text: 'Compra aprovada no cartao final 1234',
+        );
+
+        expect(result.success, isTrue);
+        expect(result.record, isNull);
+        expect(deliveryDataSource.sendCount, 0);
+        expect(await repository.getOfflineNotifications(), isEmpty);
+      },
+    );
+  });
+}
+
+IgnoredAppRepositoryImpl _createIgnoredAppRepository() {
+  return IgnoredAppRepositoryImpl(
+    platformBridgeDataSource: _FakePlatformBridgeDataSource(),
+    ignoredAppStoreDataSource: IgnoredAppStoreDataSource(),
+  );
 }
 
 OfflineNotificationModel _record(String id) {
@@ -117,6 +159,28 @@ class _FakeNotificationDeliveryDataSource
   }
 }
 
+class _CountingNotificationDeliveryDataSource
+    extends NotificationDeliveryDataSource {
+  int sendCount = 0;
+
+  @override
+  Future<DeliveryResponseModel> send({
+    required String endpoint,
+    required String app,
+    required String text,
+    required String apiKey,
+  }) async {
+    sendCount += 1;
+    return DeliveryResponseModel(
+      requestUrl: endpoint,
+      requestBody: '{"app":"$app","text":"$text"}',
+      statusCode: 201,
+      body: '{"ok":true}',
+      errorMessage: null,
+    );
+  }
+}
+
 class _FakeLocalFailureNotificationDataSource
     extends LocalFailureNotificationDataSource {
   @override
@@ -124,130 +188,4 @@ class _FakeLocalFailureNotificationDataSource
     required String id,
     required String app,
   }) async {}
-}
-
-final class _FakeSharedPreferencesAsyncPlatform
-    extends SharedPreferencesAsyncPlatform {
-  final Map<String, Object> _storage = <String, Object>{};
-
-  @override
-  Future<void> clear(
-    ClearPreferencesParameters parameters,
-    SharedPreferencesOptions options,
-  ) async {
-    final allowList = parameters.filter.allowList;
-    if (allowList == null) {
-      _storage.clear();
-      return;
-    }
-
-    _storage.removeWhere((key, _) => allowList.contains(key));
-  }
-
-  @override
-  Future<bool?> getBool(String key, SharedPreferencesOptions options) async {
-    return _storage[key] as bool?;
-  }
-
-  @override
-  Future<double?> getDouble(
-    String key,
-    SharedPreferencesOptions options,
-  ) async {
-    return _storage[key] as double?;
-  }
-
-  @override
-  Future<int?> getInt(String key, SharedPreferencesOptions options) async {
-    return _storage[key] as int?;
-  }
-
-  @override
-  Future<Map<String, Object>> getPreferences(
-    GetPreferencesParameters parameters,
-    SharedPreferencesOptions options,
-  ) async {
-    final allowList = parameters.filter.allowList;
-    if (allowList == null) {
-      return Map<String, Object>.from(_storage);
-    }
-
-    return Map<String, Object>.fromEntries(
-      _storage.entries.where((entry) => allowList.contains(entry.key)),
-    );
-  }
-
-  @override
-  Future<Set<String>> getKeys(
-    GetPreferencesParameters parameters,
-    SharedPreferencesOptions options,
-  ) async {
-    final allowList = parameters.filter.allowList;
-    if (allowList == null) {
-      return _storage.keys.toSet();
-    }
-
-    return _storage.keys.where(allowList.contains).toSet();
-  }
-
-  @override
-  Future<String?> getString(
-    String key,
-    SharedPreferencesOptions options,
-  ) async {
-    return _storage[key] as String?;
-  }
-
-  @override
-  Future<List<String>?> getStringList(
-    String key,
-    SharedPreferencesOptions options,
-  ) async {
-    return (_storage[key] as List<Object?>?)?.cast<String>();
-  }
-
-  @override
-  Future<void> setBool(
-    String key,
-    bool value,
-    SharedPreferencesOptions options,
-  ) async {
-    _storage[key] = value;
-  }
-
-  @override
-  Future<void> setDouble(
-    String key,
-    double value,
-    SharedPreferencesOptions options,
-  ) async {
-    _storage[key] = value;
-  }
-
-  @override
-  Future<void> setInt(
-    String key,
-    int value,
-    SharedPreferencesOptions options,
-  ) async {
-    _storage[key] = value;
-  }
-
-  @override
-  Future<void> setString(
-    String key,
-    String value,
-    SharedPreferencesOptions options,
-  ) async {
-    _storage[key] = value;
-  }
-
-  @override
-  Future<void> setStringList(
-    String key,
-    List<String> value,
-    SharedPreferencesOptions options,
-  ) async {
-    _storage[key] = List<String>.from(value);
-  }
 }

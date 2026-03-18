@@ -1,8 +1,10 @@
 import '../../notifications/data/datasources/platform_bridge_data_source.dart';
 import '../domain/entities/app_state_snapshot.dart';
+import '../domain/entities/installed_app.dart';
 import '../domain/entities/retry_results.dart';
 import '../domain/repositories/app_bridge_repository.dart';
 import '../domain/repositories/failure_notification_repository.dart';
+import '../domain/repositories/ignored_app_repository.dart';
 import '../domain/repositories/notification_processing_repository.dart';
 
 abstract interface class NotificationsPresentationFacade {
@@ -16,6 +18,9 @@ abstract interface class NotificationsPresentationFacade {
   Future<RetryNotificationResult> retryOfflineNotification(String id);
   Future<bool> deleteOfflineNotification(String id);
   Future<int> deleteAllOfflineNotifications();
+  Future<List<InstalledApp>> loadInstalledApps();
+  Future<void> addIgnoredApp(String packageName);
+  Future<void> removeIgnoredApp(String packageName);
   Future<void> dispose();
 }
 
@@ -25,15 +30,18 @@ class NotificationsPresentationFacadeImpl
     required PlatformBridgeDataSource platformBridgeDataSource,
     required AppBridgeRepository appBridgeRepository,
     required NotificationProcessingRepository notificationProcessingRepository,
+    required IgnoredAppRepository ignoredAppRepository,
     required FailureNotificationRepository failureNotificationRepository,
   }) : _platformBridgeDataSource = platformBridgeDataSource,
        _appBridgeRepository = appBridgeRepository,
        _notificationProcessingRepository = notificationProcessingRepository,
+       _ignoredAppRepository = ignoredAppRepository,
        _failureNotificationRepository = failureNotificationRepository;
 
   final PlatformBridgeDataSource _platformBridgeDataSource;
   final AppBridgeRepository _appBridgeRepository;
   final NotificationProcessingRepository _notificationProcessingRepository;
+  final IgnoredAppRepository _ignoredAppRepository;
   final FailureNotificationRepository _failureNotificationRepository;
 
   @override
@@ -102,6 +110,21 @@ class NotificationsPresentationFacadeImpl
   @override
   Future<int> deleteAllOfflineNotifications() {
     return _notificationProcessingRepository.deleteAllOfflineNotifications();
+  }
+
+  @override
+  Future<List<InstalledApp>> loadInstalledApps() {
+    return _ignoredAppRepository.getInstalledApps();
+  }
+
+  @override
+  Future<void> addIgnoredApp(String packageName) {
+    return _ignoredAppRepository.addIgnoredApp(packageName);
+  }
+
+  @override
+  Future<void> removeIgnoredApp(String packageName) {
+    return _ignoredAppRepository.removeIgnoredApp(packageName);
   }
 
   @override

@@ -5,6 +5,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -64,6 +71,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+            "getInstalledApplications" -> {
+                runPlatformTask("getInstalledApplications", result) {
+                    getInstalledApplications()
+                }
+            }
+
             "openNotificationAccessSettings" -> {
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                 result.success(null)
@@ -102,6 +115,72 @@ class MainActivity : FlutterActivity() {
         return enabledListeners.split(':')
             .mapNotNull(ComponentName::unflattenFromString)
             .any { it.packageName == applicationContext.packageName }
+    }
+
+    private fun getInstalledApplications(): List<Map<String, Any?>> {
+        val packageManager = applicationContext.packageManager
+        return loadInstalledApplications(packageManager)
+            .asSequence()
+            .filter { applicationInfo -> applicationInfo.packageName != applicationContext.packageName }
+            .map { applicationInfo ->
+                val appName = packageManager.getApplicationLabel(applicationInfo)
+                    ?.toString()
+                    ?.trim()
+                    .orEmpty()
+                    .ifEmpty { applicationInfo.packageName }
+
+                mapOf(
+                    "name" to appName,
+                    "packageName" to applicationInfo.packageName,
+                    "icon" to drawableToPngBytes(
+                        drawable = packageManager.getApplicationIcon(applicationInfo),
+                        sizePx = (resources.displayMetrics.density * 40).toInt().coerceAtLeast(64),
+                    ),
+                )
+            }
+            .toList()
+    }
+
+    private fun loadInstalledApplications(packageManager: PackageManager): List<ApplicationInfo> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.getInstalledApplications(
+                PackageManager.ApplicationInfoFlags.of(0),
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstalledApplications(0)
+        }
+    }
+
+    private fun drawableToPngBytes(drawable: Drawable, sizePx: Int): ByteArray? {
+        return runCatching {
+            val bitmap = when (drawable) {
+                is BitmapDrawable -> {
+                    val sourceBitmap = drawable.bitmap ?: return null
+                    Bitmap.createScaledBitmap(sourceBitmap, sizePx, sizePx, true)
+                }
+
+                else -> {
+                    val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bitmap)
+                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                    drawable.draw(canvas)
+                    bitmap
+                }
+            }
+
+            bitmapToPng(bitmap)
+        }.getOrNull()
+    }
+
+    private fun bitmapToPng(bitmap: Bitmap): ByteArray? {
+        return java.io.ByteArrayOutputStream().use { stream ->
+            if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                return null
+            }
+
+            stream.toByteArray()
+        }
     }
 
     private fun runPlatformTask(

@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../core/network/app_http_client_factory.dart';
 import '../features/all_notifications/application/all_notifications_facade.dart';
 import '../features/all_notifications/data/datasources/all_notifications_remote_data_source.dart';
 import '../features/all_notifications/data/repositories/all_notifications_repository_impl.dart';
@@ -23,9 +24,12 @@ class DependencyContainer {
 
   static AllNotificationsController createAllNotificationsController() {
     final platformBridgeDataSource = const PlatformBridgeDataSource();
+    final httpClient = AppHttpClientFactory.create();
     final repository = AllNotificationsRepositoryImpl(
       platformBridgeDataSource: platformBridgeDataSource,
-      remoteDataSource: AllNotificationsRemoteDataSource(),
+      remoteDataSource: AllNotificationsRemoteDataSource(
+        httpClient: httpClient,
+      ),
     );
     final facade = AllNotificationsFacadeImpl(repository);
 
@@ -34,6 +38,7 @@ class DependencyContainer {
 
   static AppController createAppController() {
     final platformBridgeDataSource = const PlatformBridgeDataSource();
+    final httpClient = AppHttpClientFactory.create();
     final offlineNotificationStoreDataSource =
         OfflineNotificationStoreDataSource();
     final ignoredAppRepository = IgnoredAppRepositoryImpl(
@@ -47,7 +52,9 @@ class DependencyContainer {
           platformBridgeDataSource: platformBridgeDataSource,
           offlineNotificationStoreDataSource:
               offlineNotificationStoreDataSource,
-          notificationDeliveryDataSource: NotificationDeliveryDataSource(),
+          notificationDeliveryDataSource: NotificationDeliveryDataSource(
+            httpClient: httpClient,
+          ),
           ignoredAppRepository: ignoredAppRepository,
           localFailureNotificationDataSource:
               localFailureNotificationDataSource,
@@ -75,6 +82,7 @@ class DependencyContainer {
 
   static BackgroundChannelHandler createBackgroundChannelHandler() {
     final platformBridgeDataSource = const PlatformBridgeDataSource();
+    final httpClient = AppHttpClientFactory.create();
     final ignoredAppRepository = IgnoredAppRepositoryImpl(
       platformBridgeDataSource: platformBridgeDataSource,
       ignoredAppStoreDataSource: IgnoredAppStoreDataSource(),
@@ -84,7 +92,9 @@ class DependencyContainer {
         platformBridgeDataSource: platformBridgeDataSource,
         offlineNotificationStoreDataSource:
             OfflineNotificationStoreDataSource(),
-        notificationDeliveryDataSource: NotificationDeliveryDataSource(),
+        notificationDeliveryDataSource: NotificationDeliveryDataSource(
+          httpClient: httpClient,
+        ),
         ignoredAppRepository: ignoredAppRepository,
         localFailureNotificationDataSource:
             LocalFailureNotificationDataSource(),

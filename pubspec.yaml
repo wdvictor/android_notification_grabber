@@ -37,6 +37,7 @@ dependencies:
   shared_preferences_android: ^2.4.21
   flutter_local_notifications: ^21.0.0
   uuid: ^4.5.3
+  dio: ^5.9.2
   curl_logger_dio_interceptor: ^1.0.1
 
 dev_dependencies:

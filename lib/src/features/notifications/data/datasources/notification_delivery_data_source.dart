@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:dio/dio.dart';
+
+import '../../../../core/network/app_http_client_factory.dart';
+import '../../../../core/network/dio_error_message.dart';
 import '../models/delivery_response_model.dart';
 
 class NotificationDeliveryDataSource {
-  static const Duration _connectTimeout = Duration(milliseconds: 120000);
-  static const Duration _readTimeout = Duration(milliseconds: 120000);
+  NotificationDeliveryDataSource({Dio? httpClient})
+    : _httpClient = httpClient ?? AppHttpClientFactory.create();
+
   static const String _missingEndpointMessage =
       'Backend base URL not configured. Set BACKEND_BASE_URL in .env.';
+  final Dio _httpClient;
 
   Future<DeliveryResponseModel> send({
     required String endpoint,
@@ -30,23 +35,20 @@ class NotificationDeliveryDataSource {
       );
     }
 
-    final client = HttpClient()..connectionTimeout = _connectTimeout;
-
     try {
-      final request = await client.putUrl(endpointUri).timeout(_connectTimeout);
-      request.headers.set(
-        HttpHeaders.contentTypeHeader,
-        'application/json; charset=UTF-8',
+      final response = await _httpClient.requestUri<String>(
+        endpointUri,
+        data: requestBody,
+        options: Options(
+          method: 'PUT',
+          headers: <String, Object?>{
+            Headers.contentTypeHeader: 'application/json; charset=UTF-8',
+            Headers.acceptHeader: 'application/json',
+            'X-API-Key': apiKey,
+          },
+        ),
       );
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set('X-API-Key', apiKey);
-      request.add(utf8.encode(requestBody));
-
-      final response = await request.close().timeout(_readTimeout);
-      final responseBody = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(_readTimeout);
+      final responseBody = _responseBody(response.data);
 
       return DeliveryResponseModel(
         requestUrl: endpointUri.toString(),
@@ -60,8 +62,6 @@ class NotificationDeliveryDataSource {
         requestBody: requestBody,
         errorMessage: _describeError(error),
       );
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -88,19 +88,14 @@ class NotificationDeliveryDataSource {
   }
 
   String _describeError(Object error) {
-    if (error is SocketException) {
-      return error.message;
+    return describeHttpError(error);
+  }
+
+  String _responseBody(Object? data) {
+    if (data == null) {
+      return '';
     }
 
-    if (error is HttpException) {
-      return error.message;
-    }
-
-    if (error is TimeoutException) {
-      final message = error.message;
-      return message == null || message.isEmpty ? 'TimeoutException' : message;
-    }
-
-    return error.toString();
+    return data is String ? data : data.toString();
   }
 }

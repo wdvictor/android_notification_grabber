@@ -1,16 +1,21 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'package:dio/dio.dart';
+
+import '../../../../core/network/app_http_client_factory.dart';
+import '../../../../core/network/dio_error_message.dart';
 import '../../domain/entities/all_notifications_query.dart';
 import '../models/all_notification_model.dart';
 import '../models/update_notification_result_model.dart';
 
 class AllNotificationsRemoteDataSource {
-  static const Duration _connectTimeout = Duration(milliseconds: 120000);
-  static const Duration _readTimeout = Duration(milliseconds: 120000);
+  AllNotificationsRemoteDataSource({Dio? httpClient})
+    : _httpClient = httpClient ?? AppHttpClientFactory.create();
+
   static const String _missingEndpointMessage =
       'Backend base URL not configured. Set BACKEND_BASE_URL in .env.';
+  final Dio _httpClient;
 
   Future<List<AllNotificationModel>> fetch({
     required String endpoint,
@@ -22,22 +27,23 @@ class AllNotificationsRemoteDataSource {
       throw Exception(_describeEndpointError(endpoint));
     }
 
-    final client = HttpClient()..connectionTimeout = _connectTimeout;
-
     try {
-      final request = await client.getUrl(endpointUri).timeout(_connectTimeout);
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set('X-API-Key', apiKey);
+      final response = await _httpClient.requestUri<String>(
+        endpointUri,
+        options: Options(
+          method: 'GET',
+          headers: <String, Object?>{
+            Headers.acceptHeader: 'application/json',
+            'X-API-Key': apiKey,
+          },
+        ),
+      );
+      final statusCode = response.statusCode ?? 0;
+      final responseBody = _responseBody(response.data);
 
-      final response = await request.close().timeout(_readTimeout);
-      final responseBody = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(_readTimeout);
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (statusCode < 200 || statusCode >= 300) {
         throw Exception(
-          'get_all_notifications returned ${response.statusCode}: $responseBody',
+          'get_all_notifications returned $statusCode: $responseBody',
         );
       }
 
@@ -63,8 +69,6 @@ class AllNotificationsRemoteDataSource {
       throw Exception(error.message);
     } catch (error) {
       throw Exception(_describeError(error));
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -90,23 +94,20 @@ class AllNotificationsRemoteDataSource {
       );
     }
 
-    final client = HttpClient()..connectionTimeout = _connectTimeout;
-
     try {
-      final request = await client.putUrl(endpointUri).timeout(_connectTimeout);
-      request.headers.set(
-        HttpHeaders.contentTypeHeader,
-        'application/json; charset=UTF-8',
+      final response = await _httpClient.requestUri<String>(
+        endpointUri,
+        data: requestBody,
+        options: Options(
+          method: 'PUT',
+          headers: <String, Object?>{
+            Headers.contentTypeHeader: 'application/json; charset=UTF-8',
+            Headers.acceptHeader: 'application/json',
+            'X-API-Key': apiKey,
+          },
+        ),
       );
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      request.headers.set('X-API-Key', apiKey);
-      request.add(utf8.encode(requestBody));
-
-      final response = await request.close().timeout(_readTimeout);
-      final responseBody = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(_readTimeout);
+      final responseBody = _responseBody(response.data);
 
       return UpdateNotificationResultModel(
         notificationId: id,
@@ -129,8 +130,6 @@ class AllNotificationsRemoteDataSource {
         requestBody: requestBody,
         responseErrorMessage: _describeError(error),
       );
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -186,19 +185,14 @@ class AllNotificationsRemoteDataSource {
   }
 
   String _describeError(Object error) {
-    if (error is SocketException) {
-      return error.message;
+    return describeHttpError(error);
+  }
+
+  String _responseBody(Object? data) {
+    if (data == null) {
+      return '';
     }
 
-    if (error is HttpException) {
-      return error.message;
-    }
-
-    if (error is TimeoutException) {
-      final message = error.message;
-      return message == null || message.isEmpty ? 'TimeoutException' : message;
-    }
-
-    return error.toString();
+    return data is String ? data : data.toString();
   }
 }

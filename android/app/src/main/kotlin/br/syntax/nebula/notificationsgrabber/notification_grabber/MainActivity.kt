@@ -102,6 +102,10 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+            "getApiKey" -> result.success(BuildConfig.X_API_KEY)
+
+            "getBackendBaseUrl" -> result.success(BuildConfig.BACKEND_BASE_URL)
+
             else -> result.notImplemented()
         }
     }

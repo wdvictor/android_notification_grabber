@@ -1,5 +1,9 @@
 import 'package:uuid/uuid.dart';
 
+import '../features/all_notifications/application/all_notifications_facade.dart';
+import '../features/all_notifications/data/datasources/all_notifications_remote_data_source.dart';
+import '../features/all_notifications/data/repositories/all_notifications_repository_impl.dart';
+import '../features/all_notifications/presentation/controllers/all_notifications_controller.dart';
 import '../features/notifications/application/notifications_background_facade.dart';
 import '../features/notifications/application/notifications_presentation_facade.dart';
 import '../features/notifications/data/datasources/ignored_app_store_data_source.dart';
@@ -16,6 +20,17 @@ import 'background_channel_handler.dart';
 
 class DependencyContainer {
   const DependencyContainer._();
+
+  static AllNotificationsController createAllNotificationsController() {
+    final platformBridgeDataSource = const PlatformBridgeDataSource();
+    final repository = AllNotificationsRepositoryImpl(
+      platformBridgeDataSource: platformBridgeDataSource,
+      remoteDataSource: AllNotificationsRemoteDataSource(),
+    );
+    final facade = AllNotificationsFacadeImpl(repository);
+
+    return AllNotificationsController(facade);
+  }
 
   static AppController createAppController() {
     final platformBridgeDataSource = const PlatformBridgeDataSource();

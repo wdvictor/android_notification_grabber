@@ -2,10 +2,12 @@ class BackendEndpoints {
   BackendEndpoints(String baseUrl) : _baseUrl = _normalizeBaseUrl(baseUrl);
 
   static const String addNotificationPath = 'add_notification';
+  static const String getAllNotificationsPath = 'get_all_notifications';
 
   final String _baseUrl;
 
   String get addNotification => _build(addNotificationPath);
+  String get getAllNotifications => _build(getAllNotificationsPath);
 
   String _build(String path) {
     final normalizedPath = path.trim().replaceFirst(RegExp(r'^/+'), '');

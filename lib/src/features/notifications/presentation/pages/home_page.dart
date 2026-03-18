@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../all_notifications/presentation/pages/all_notifications_page.dart';
 import '../../../../core/formatters/text_formatter.dart';
 import '../../domain/entities/offline_notification.dart';
 import '../controllers/app_controller.dart';
@@ -245,6 +246,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _openAllNotifications() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const AllNotificationsPage()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -284,6 +291,7 @@ class _HomePageState extends State<HomePage> {
                           total: widget.controller.offlineNotifications.length,
                           isRetryingAll: widget.controller.isRetryingAll,
                           isDeletingAll: widget.controller.isDeletingAll,
+                          onOpenAllNotifications: _openAllNotifications,
                           onRetryAll:
                               widget.controller.isRetryingAll ||
                                   widget.controller.isDeletingAll ||
@@ -422,6 +430,7 @@ class _HeroPanel extends StatelessWidget {
     required this.total,
     required this.isRetryingAll,
     required this.isDeletingAll,
+    required this.onOpenAllNotifications,
     required this.onRetryAll,
     required this.onDeleteAll,
   });
@@ -429,6 +438,7 @@ class _HeroPanel extends StatelessWidget {
   final int total;
   final bool isRetryingAll;
   final bool isDeletingAll;
+  final Future<void> Function() onOpenAllNotifications;
   final Future<void> Function()? onRetryAll;
   final Future<void> Function()? onDeleteAll;
 
@@ -517,6 +527,19 @@ class _HeroPanel extends StatelessWidget {
                 label: Text(
                   isRetryingAll ? 'Reenviando...' : 'Tentar de novo tudo',
                 ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => onOpenAllNotifications(),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0x55FFFFFF)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                ),
+                icon: const Icon(Icons.dataset_outlined),
+                label: const Text('Ver dados da API'),
               ),
               OutlinedButton.icon(
                 onPressed: onDeleteAll == null ? null : () => onDeleteAll!(),

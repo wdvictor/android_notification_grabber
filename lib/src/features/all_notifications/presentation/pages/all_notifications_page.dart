@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/dependency_container.dart';
 import '../../domain/entities/all_notification.dart';
+import '../../domain/entities/delete_notification_result.dart';
 import '../../domain/entities/update_notification_result.dart';
 import '../controllers/all_notifications_controller.dart';
 
 class AllNotificationsPage extends StatefulWidget {
-  const AllNotificationsPage({super.key, AllNotificationsController? controller})
-    : _controller = controller;
+  const AllNotificationsPage({
+    super.key,
+    AllNotificationsController? controller,
+  }) : _controller = controller;
 
   final AllNotificationsController? _controller;
 
@@ -17,7 +20,8 @@ class AllNotificationsPage extends StatefulWidget {
 
 class _AllNotificationsPageState extends State<AllNotificationsPage> {
   late final AllNotificationsController _controller =
-      widget._controller ?? DependencyContainer.createAllNotificationsController();
+      widget._controller ??
+      DependencyContainer.createAllNotificationsController();
   late final bool _ownsController = widget._controller == null;
   late final TextEditingController _queryController = TextEditingController(
     text: _controller.currentSearchText,
@@ -48,7 +52,10 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
 
   Future<void> _clearFilters() async {
     _queryController.clear();
-    await _controller.applyFilters(searchText: '', filter: FinancialTransactionFilterOption.any);
+    await _controller.applyFilters(
+      searchText: '',
+      filter: FinancialTransactionFilterOption.any,
+    );
   }
 
   Future<void> _updateNotification({
@@ -69,6 +76,18 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
     );
   }
 
+  Future<void> _deleteNotification(AllNotification notification) async {
+    final result = await _controller.deleteNotification(id: notification.id);
+    if (!mounted || result.isSuccess) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _DeleteFailureDialog(result: result),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -83,7 +102,11 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
           body: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFFE0F2FE), Color(0xFFF8FAFC), Color(0xFFFFF7ED)],
+                colors: [
+                  Color(0xFFE0F2FE),
+                  Color(0xFFF8FAFC),
+                  Color(0xFFFFF7ED),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -144,10 +167,11 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
                         padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
                         child: Text(
                           'Resultados da API',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
-                          ),
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: const Color(0xFF0F172A),
+                              ),
                         ),
                       ),
                     ),
@@ -157,28 +181,41 @@ class _AllNotificationsPageState extends State<AllNotificationsPage> {
                         sliver: SliverList.separated(
                           itemCount: 6,
                           itemBuilder: (_, _) => const _NotificationSkeleton(),
-                          separatorBuilder: (_, _) => const SizedBox(height: 14),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 14),
                         ),
                       )
                     else if (_controller.notifications.isEmpty)
-                      const SliverFillRemaining(hasScrollBody: false, child: _EmptyState())
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: _EmptyState(),
+                      )
                     else
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                         sliver: SliverList.separated(
                           itemCount: _controller.notifications.length,
                           itemBuilder: (context, index) {
-                            final notification = _controller.notifications[index];
+                            final notification =
+                                _controller.notifications[index];
                             return _NotificationCard(
                               notification: notification,
-                              isUpdating: _controller.isUpdatingNotification(notification.id),
-                              onMarkTrue: () =>
-                                  _updateNotification(notification: notification, value: true),
-                              onMarkFalse: () =>
-                                  _updateNotification(notification: notification, value: false),
+                              isUpdating: _controller.isMutatingNotification(
+                                notification.id,
+                              ),
+                              onMarkTrue: () => _updateNotification(
+                                notification: notification,
+                                value: true,
+                              ),
+                              onMarkFalse: () => _updateNotification(
+                                notification: notification,
+                                value: false,
+                              ),
+                              onDelete: () => _deleteNotification(notification),
                             );
                           },
-                          separatorBuilder: (_, _) => const SizedBox(height: 14),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 14),
                         ),
                       ),
                     SliverToBoxAdapter(
@@ -220,7 +257,9 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final searchDescription = searchText.isEmpty ? 'Sem busca textual' : searchText;
+    final searchDescription = searchText.isEmpty
+        ? 'Sem busca textual'
+        : searchText;
     final filterDescription = switch (filter) {
       FinancialTransactionFilterOption.any => 'Sem filtro de transação',
       FinancialTransactionFilterOption.onlyTrue => 'Somente true',
@@ -237,7 +276,11 @@ class _SummaryCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         boxShadow: const [
-          BoxShadow(color: Color(0x1F082F49), blurRadius: 28, offset: Offset(0, 18)),
+          BoxShadow(
+            color: Color(0x1F082F49),
+            blurRadius: 28,
+            offset: Offset(0, 18),
+          ),
         ],
       ),
       child: Column(
@@ -245,14 +288,19 @@ class _SummaryCard extends StatelessWidget {
         children: [
           Text(
             'Página $currentPage',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             '$itemCount registros carregados nesta página.',
-            style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 16, height: 1.4),
+            style: const TextStyle(
+              color: Color(0xFFE2E8F0),
+              fontSize: 16,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 18),
           Wrap(
@@ -285,7 +333,10 @@ class _SummaryPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -317,7 +368,11 @@ class _FilterCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFBAE6FD)),
         boxShadow: const [
-          BoxShadow(color: Color(0x140F172A), blurRadius: 24, offset: Offset(0, 12)),
+          BoxShadow(
+            color: Color(0x140F172A),
+            blurRadius: 24,
+            offset: Offset(0, 12),
+          ),
         ],
       ),
       child: Column(
@@ -333,7 +388,11 @@ class _FilterCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Text(
             'O campo p sempre é enviado. q e isft só são enviados quando existirem.',
-            style: TextStyle(color: Color(0xFF475569), fontSize: 14, height: 1.4),
+            style: TextStyle(
+              color: Color(0xFF475569),
+              fontSize: 14,
+              height: 1.4,
+            ),
           ),
           const SizedBox(height: 18),
           TextField(
@@ -358,7 +417,12 @@ class _FilterCard extends StatelessWidget {
             key: ValueKey<FinancialTransactionFilterOption>(selectedFilter),
             initialValue: selectedFilter,
             items: FinancialTransactionFilterOption.values
-                .map((option) => DropdownMenuItem(value: option, child: Text(option.label)))
+                .map(
+                  (option) => DropdownMenuItem(
+                    value: option,
+                    child: Text(option.label),
+                  ),
+                )
                 .toList(growable: false),
             onChanged: isLoading ? null : onFilterChanged,
             decoration: InputDecoration(
@@ -381,7 +445,10 @@ class _FilterCard extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF0E7490),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                 ),
                 icon: const Icon(Icons.filter_alt_rounded),
                 label: const Text('Aplicar filtros'),
@@ -390,7 +457,10 @@ class _FilterCard extends StatelessWidget {
                 onPressed: isLoading ? null : () => onClear(),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF0F172A),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                 ),
                 icon: const Icon(Icons.cleaning_services_outlined),
                 label: const Text('Limpar'),
@@ -428,13 +498,19 @@ class _ErrorCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   'Falha ao carregar a API',
-                  style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF9A3412)),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF9A3412),
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Text(message, style: const TextStyle(color: Color(0xFF7C2D12), height: 1.5)),
+          Text(
+            message,
+            style: const TextStyle(color: Color(0xFF7C2D12), height: 1.5),
+          ),
           const SizedBox(height: 14),
           FilledButton(
             onPressed: () => onRetry(),
@@ -456,12 +532,14 @@ class _NotificationCard extends StatelessWidget {
     required this.isUpdating,
     required this.onMarkTrue,
     required this.onMarkFalse,
+    required this.onDelete,
   });
 
   final AllNotification notification;
   final bool isUpdating;
   final Future<void> Function() onMarkTrue;
   final Future<void> Function() onMarkFalse;
+  final Future<void> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -472,7 +550,11 @@ class _NotificationCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: const [
-          BoxShadow(color: Color(0x120F172A), blurRadius: 20, offset: Offset(0, 12)),
+          BoxShadow(
+            color: Color(0x120F172A),
+            blurRadius: 20,
+            offset: Offset(0, 12),
+          ),
         ],
       ),
       child: Column(
@@ -484,25 +566,34 @@ class _NotificationCard extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFE0F2FE),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   notification.app,
-                  style: const TextStyle(color: Color(0xFF0C4A6E), fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    color: Color(0xFF0C4A6E),
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-              _FinancialStatusChip(isFinancialTransaction: notification.isFinancialTransaction),
+              _FinancialStatusChip(
+                isFinancialTransaction: notification.isFinancialTransaction,
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
             notification.preview,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: const Color(0xFF0F172A), height: 1.55),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: const Color(0xFF0F172A),
+              height: 1.55,
+            ),
           ),
           const SizedBox(height: 18),
           Wrap(
@@ -518,7 +609,10 @@ class _NotificationCard extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF15803D),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                 ),
                 icon: const Icon(Icons.check_circle_outline_rounded),
                 label: const Text('Confirmar transação financeira'),
@@ -532,10 +626,30 @@ class _NotificationCard extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFFB91C1C),
                   side: const BorderSide(color: Color(0xFFFECACA)),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                 ),
                 icon: const Icon(Icons.remove_circle_outline_rounded),
                 label: const Text('Não é transação financeira'),
+              ),
+              OutlinedButton.icon(
+                onPressed: isUpdating
+                    ? null
+                    : () {
+                        onDelete();
+                      },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF991B1B),
+                  side: const BorderSide(color: Color(0xFFFECACA)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
+                ),
+                icon: const Icon(Icons.delete_outline_rounded),
+                label: const Text('Deletar notificação'),
               ),
             ],
           ),
@@ -552,8 +666,76 @@ class _UpdateFailureDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _RequestFailureDialog(
+      title: 'Falha ao atualizar notificação',
+      description: 'A requisição para `update_notification` falhou.',
+      requestLines: [
+        'Método: ${result.requestMethod}',
+        'URL: ${result.requestUrl}',
+        'Body:',
+        result.requestBody,
+      ],
+      responseLines: [
+        'Status: ${result.responseStatusCode?.toString() ?? 'sem status'}',
+        if (result.responseErrorMessage != null &&
+            result.responseErrorMessage!.trim().isNotEmpty)
+          'Erro: ${result.responseErrorMessage}',
+        'Body:',
+        (result.responseBody == null || result.responseBody!.isEmpty)
+            ? 'sem body'
+            : result.responseBody!,
+      ],
+    );
+  }
+}
+
+class _DeleteFailureDialog extends StatelessWidget {
+  const _DeleteFailureDialog({required this.result});
+
+  final DeleteNotificationResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RequestFailureDialog(
+      title: 'Falha ao deletar notificação',
+      description: 'A requisição para `delete_notification` falhou.',
+      requestLines: [
+        'Método: ${result.requestMethod}',
+        'URL: ${result.requestUrl}',
+        'Query:',
+        result.requestQuery,
+      ],
+      responseLines: [
+        'Status: ${result.responseStatusCode?.toString() ?? 'sem status'}',
+        if (result.responseErrorMessage != null &&
+            result.responseErrorMessage!.trim().isNotEmpty)
+          'Erro: ${result.responseErrorMessage}',
+        'Body:',
+        (result.responseBody == null || result.responseBody!.isEmpty)
+            ? 'sem body'
+            : result.responseBody!,
+      ],
+    );
+  }
+}
+
+class _RequestFailureDialog extends StatelessWidget {
+  const _RequestFailureDialog({
+    required this.title,
+    required this.description,
+    required this.requestLines,
+    required this.responseLines,
+  });
+
+  final String title;
+  final String description;
+  final List<String> requestLines;
+  final List<String> responseLines;
+
+  @override
+  Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Falha ao atualizar notificação'),
+      title: Text(title),
       content: SizedBox(
         width: double.maxFinite,
         child: SingleChildScrollView(
@@ -562,41 +744,25 @@ class _UpdateFailureDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'A requisição para `update_notification` falhou.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF475569), height: 1.5),
+                description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF475569),
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 20),
-              _DialogSection(
-                title: 'Requisição',
-                lines: [
-                  'Método: ${result.requestMethod}',
-                  'URL: ${result.requestUrl}',
-                  'Body:',
-                  result.requestBody,
-                ],
-              ),
+              _DialogSection(title: 'Requisição', lines: requestLines),
               const SizedBox(height: 16),
-              _DialogSection(
-                title: 'Resposta',
-                lines: [
-                  'Status: ${result.responseStatusCode?.toString() ?? 'sem status'}',
-                  if (result.responseErrorMessage != null &&
-                      result.responseErrorMessage!.trim().isNotEmpty)
-                    'Erro: ${result.responseErrorMessage}',
-                  'Body:',
-                  (result.responseBody == null || result.responseBody!.isEmpty)
-                      ? 'sem body'
-                      : result.responseBody!,
-                ],
-              ),
+              _DialogSection(title: 'Resposta', lines: responseLines),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Fechar')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
       ],
     );
   }
@@ -623,7 +789,11 @@ class _DialogSection extends StatelessWidget {
         const SizedBox(height: 8),
         SelectableText(
           lines.join('\n'),
-          style: const TextStyle(color: Color(0xFF334155), fontSize: 13, height: 1.5),
+          style: const TextStyle(
+            color: Color(0xFF334155),
+            fontSize: 13,
+            height: 1.5,
+          ),
         ),
       ],
     );
@@ -637,15 +807,30 @@ class _FinancialStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (label, foregroundColor, backgroundColor) = switch (isFinancialTransaction) {
-      true => ('Transação financeira', const Color(0xFF166534), const Color(0xFFDCFCE7)),
-      false => ('Não é transação financeira', const Color(0xFF991B1B), const Color(0xFFFEE2E2)),
+    final (
+      label,
+      foregroundColor,
+      backgroundColor,
+    ) = switch (isFinancialTransaction) {
+      true => (
+        'Transação financeira',
+        const Color(0xFF166534),
+        const Color(0xFFDCFCE7),
+      ),
+      false => (
+        'Não é transação financeira',
+        const Color(0xFF991B1B),
+        const Color(0xFFFEE2E2),
+      ),
       null => ('Classificar', const Color(0xFF475569), const Color(0xFFE2E8F0)),
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: Text(
         label,
         style: TextStyle(color: foregroundColor, fontWeight: FontWeight.w700),
@@ -679,9 +864,13 @@ class _NotificationSkeleton extends StatelessWidget {
           SizedBox(height: 18),
           Row(
             children: [
-              Expanded(child: _SkeletonLine(width: double.infinity, height: 44)),
+              Expanded(
+                child: _SkeletonLine(width: double.infinity, height: 44),
+              ),
               SizedBox(width: 12),
-              Expanded(child: _SkeletonLine(width: double.infinity, height: 44)),
+              Expanded(
+                child: _SkeletonLine(width: double.infinity, height: 44),
+              ),
             ],
           ),
         ],
@@ -754,7 +943,9 @@ class _PaginationCard extends StatelessWidget {
             runSpacing: 12,
             children: [
               OutlinedButton.icon(
-                onPressed: !hasPreviousPage || isLoading ? null : () => onPrevious(),
+                onPressed: !hasPreviousPage || isLoading
+                    ? null
+                    : () => onPrevious(),
                 icon: const Icon(Icons.chevron_left_rounded),
                 label: const Text('Anterior'),
               ),
@@ -800,7 +991,11 @@ class _EmptyState extends StatelessWidget {
                   color: const Color(0xFFE0F2FE),
                   borderRadius: BorderRadius.circular(24),
                 ),
-                child: const Icon(Icons.dataset_outlined, size: 38, color: Color(0xFF0E7490)),
+                child: const Icon(
+                  Icons.dataset_outlined,
+                  size: 38,
+                  color: Color(0xFF0E7490),
+                ),
               ),
               const SizedBox(height: 18),
               Text(
@@ -814,7 +1009,11 @@ class _EmptyState extends StatelessWidget {
               const Text(
                 'A API não retornou registros para os filtros aplicados nesta página.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF475569), fontSize: 15, height: 1.5),
+                style: TextStyle(
+                  color: Color(0xFF475569),
+                  fontSize: 15,
+                  height: 1.5,
+                ),
               ),
             ],
           ),

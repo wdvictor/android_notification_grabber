@@ -7,6 +7,7 @@ import '../../../../core/network/app_http_client_factory.dart';
 import '../../../../core/network/dio_error_message.dart';
 import '../../domain/entities/all_notifications_query.dart';
 import '../models/all_notification_model.dart';
+import '../models/delete_notification_result_model.dart';
 import '../models/update_notification_result_model.dart';
 
 class AllNotificationsRemoteDataSource {
@@ -133,6 +134,66 @@ class AllNotificationsRemoteDataSource {
     }
   }
 
+  Future<DeleteNotificationResultModel> delete({
+    required String endpoint,
+    required String apiKey,
+    required String id,
+  }) async {
+    final endpointUri = _parseEndpoint(endpoint);
+    final requestQuery = _encodeQueryParameters(<String, String>{'id': id});
+    if (endpointUri == null) {
+      return DeleteNotificationResultModel(
+        notificationId: id,
+        requestMethod: 'DELETE',
+        requestUrl: endpoint.trim(),
+        requestQuery: requestQuery,
+        responseErrorMessage: _describeEndpointError(endpoint),
+      );
+    }
+
+    final requestUri = endpointUri.replace(
+      queryParameters: <String, String>{
+        ...endpointUri.queryParameters,
+        'id': id,
+      },
+    );
+
+    try {
+      final response = await _httpClient.requestUri<String>(
+        requestUri,
+        options: Options(
+          method: 'DELETE',
+          headers: <String, Object?>{
+            Headers.acceptHeader: 'application/json',
+            'X-API-Key': apiKey,
+          },
+        ),
+      );
+      final responseBody = _responseBody(response.data);
+      final statusCode = response.statusCode;
+
+      return DeleteNotificationResultModel(
+        notificationId: id,
+        requestMethod: 'DELETE',
+        requestUrl: requestUri.toString(),
+        requestQuery: requestUri.query,
+        responseStatusCode: statusCode,
+        responseBody: responseBody,
+        responseErrorMessage: _isSuccessfulStatusCode(statusCode)
+            ? null
+            : 'delete_notification returned $statusCode',
+      );
+    } catch (error) {
+      return DeleteNotificationResultModel(
+        notificationId: id,
+        requestMethod: 'DELETE',
+        requestUrl: requestUri.toString(),
+        requestQuery: requestUri.query,
+        responseErrorMessage: _describeError(error),
+      );
+    }
+  }
+
   Uri? _buildEndpointUri({
     required String endpoint,
     required AllNotificationsQuery query,
@@ -186,6 +247,14 @@ class AllNotificationsRemoteDataSource {
 
   String _describeError(Object error) {
     return describeHttpError(error);
+  }
+
+  bool _isSuccessfulStatusCode(int? statusCode) {
+    return statusCode != null && statusCode >= 200 && statusCode < 300;
+  }
+
+  String _encodeQueryParameters(Map<String, String> parameters) {
+    return Uri(queryParameters: parameters).query;
   }
 
   String _responseBody(Object? data) {

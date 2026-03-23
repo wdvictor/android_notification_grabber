@@ -1,4 +1,5 @@
 import '../domain/entities/all_notifications_query.dart';
+import '../domain/entities/delete_notification_result.dart';
 import '../domain/entities/paginated_all_notifications.dart';
 import '../domain/entities/update_notification_result.dart';
 import '../domain/repositories/all_notifications_repository.dart';
@@ -9,6 +10,7 @@ abstract interface class AllNotificationsFacade {
     required String id,
     required bool isFinancialTransaction,
   });
+  Future<DeleteNotificationResult> deleteNotification({required String id});
 }
 
 class AllNotificationsFacadeImpl implements AllNotificationsFacade {
@@ -33,5 +35,10 @@ class AllNotificationsFacadeImpl implements AllNotificationsFacade {
       id: id,
       isFinancialTransaction: isFinancialTransaction,
     );
+  }
+
+  @override
+  Future<DeleteNotificationResult> deleteNotification({required String id}) {
+    return _repository.deleteNotification(id: id);
   }
 }

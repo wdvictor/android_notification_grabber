@@ -143,6 +143,59 @@ void main() {
         expect(result.responseErrorMessage, 'update_notification returned 500');
       },
     );
+
+    test(
+      'envia DELETE para delete_notification com query id e trata 204 como sucesso',
+      () async {
+        final dataSource = AllNotificationsRemoteDataSource();
+        responseStatusCode = 204;
+        responseBody = '';
+
+        final result = await dataSource.delete(
+          endpoint:
+              'http://${server.address.address}:${server.port}/delete_notification',
+          apiKey: 'secret-key',
+          id: 'notification-11',
+        );
+
+        expect(capturedRequest.method, 'DELETE');
+        expect(capturedRequest.path, '/delete_notification');
+        expect(capturedRequest.apiKey, 'secret-key');
+        expect(capturedRequest.queryParameters, <String, String>{
+          'id': 'notification-11',
+        });
+        expect(capturedRequest.body, isEmpty);
+        expect(result.responseStatusCode, 204);
+        expect(result.responseErrorMessage, isNull);
+        expect(result.requestQuery, 'id=notification-11');
+      },
+    );
+
+    test(
+      'mantem dados de request e response quando delete_notification falha',
+      () async {
+        final dataSource = AllNotificationsRemoteDataSource();
+        responseStatusCode = 500;
+        responseBody = '{"detail":"failed"}';
+
+        final result = await dataSource.delete(
+          endpoint:
+              'http://${server.address.address}:${server.port}/delete_notification',
+          apiKey: 'secret-key',
+          id: 'notification-12',
+        );
+
+        expect(result.requestMethod, 'DELETE');
+        expect(
+          result.requestUrl,
+          contains('/delete_notification?id=notification-12'),
+        );
+        expect(result.requestQuery, 'id=notification-12');
+        expect(result.responseStatusCode, 500);
+        expect(result.responseBody, '{"detail":"failed"}');
+        expect(result.responseErrorMessage, 'delete_notification returned 500');
+      },
+    );
   });
 }
 

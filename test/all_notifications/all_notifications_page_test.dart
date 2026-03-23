@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:notification_grabber/src/features/all_notifications/application/all_notifications_facade.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/all_notification.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/all_notifications_query.dart';
+import 'package:notification_grabber/src/features/all_notifications/domain/entities/delete_notification_result.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/paginated_all_notifications.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/update_notification_result.dart';
 import 'package:notification_grabber/src/features/all_notifications/presentation/controllers/all_notifications_controller.dart';
@@ -32,6 +33,8 @@ void main() {
                     responseStatusCode: 200,
                     responseBody: '{"ok":true}',
                   ),
+          deleteResultBuilder: ({required String id}) =>
+              _buildDeleteResult(id: id),
         );
 
         await _pumpPage(tester, facade);
@@ -80,6 +83,8 @@ void main() {
                     responseStatusCode: 200,
                     responseBody: '{"ok":true}',
                   ),
+          deleteResultBuilder: ({required String id}) =>
+              _buildDeleteResult(id: id),
         );
 
         await _pumpPage(tester, facade);
@@ -133,6 +138,8 @@ void main() {
                     responseBody: '{"detail":"failed"}',
                     responseErrorMessage: 'update_notification returned 500',
                   ),
+          deleteResultBuilder: ({required String id}) =>
+              _buildDeleteResult(id: id),
         );
 
         await _pumpPage(tester, facade);
@@ -166,6 +173,104 @@ void main() {
         expect(find.text('Classificar'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'ao deletar remove o card, envia delete e nao reabre get_all_notifications',
+      (tester) async {
+        final facade = _FakeAllNotificationsFacade(
+          initialNotifications: const <AllNotification>[
+            AllNotification(
+              id: 'notification-4',
+              app: 'Banco XPTO',
+              text: 'Mensagem para deletar',
+              isFinancialTransaction: true,
+            ),
+          ],
+          updateResultBuilder:
+              ({required String id, required bool isFinancialTransaction}) =>
+                  _buildUpdateResult(
+                    id: id,
+                    isFinancialTransaction: isFinancialTransaction,
+                    responseStatusCode: 200,
+                    responseBody: '{"ok":true}',
+                  ),
+          deleteResultBuilder: ({required String id}) =>
+              _buildDeleteResult(id: id, responseStatusCode: 204),
+        );
+
+        await _pumpPage(tester, facade);
+        await _scrollUntilVisible(
+          tester,
+          find.widgetWithText(OutlinedButton, 'Deletar notificação'),
+        );
+
+        expect(facade.loadCalls, 1);
+        expect(find.text('Mensagem para deletar'), findsOneWidget);
+
+        await tester.tap(
+          find.widgetWithText(OutlinedButton, 'Deletar notificação'),
+        );
+        await tester.pumpAndSettle();
+
+        expect(facade.loadCalls, 1);
+        expect(facade.deleteCalls, <String>['notification-4']);
+        expect(find.text('Mensagem para deletar'), findsNothing);
+        expect(find.text('Nenhum dado retornado'), findsOneWidget);
+        expect(find.byType(AlertDialog), findsNothing);
+      },
+    );
+
+    testWidgets('ao falhar delete exibe o popup e mantem o card na lista', (
+      tester,
+    ) async {
+      final facade = _FakeAllNotificationsFacade(
+        initialNotifications: const <AllNotification>[
+          AllNotification(
+            id: 'notification-5',
+            app: 'Banco XPTO',
+            text: 'Mensagem que falha ao deletar',
+            isFinancialTransaction: true,
+          ),
+        ],
+        updateResultBuilder:
+            ({required String id, required bool isFinancialTransaction}) =>
+                _buildUpdateResult(
+                  id: id,
+                  isFinancialTransaction: isFinancialTransaction,
+                  responseStatusCode: 200,
+                  responseBody: '{"ok":true}',
+                ),
+        deleteResultBuilder: ({required String id}) => _buildDeleteResult(
+          id: id,
+          responseStatusCode: 500,
+          responseBody: '{"detail":"failed"}',
+          responseErrorMessage: 'delete_notification returned 500',
+        ),
+      );
+
+      await _pumpPage(tester, facade);
+      await _scrollUntilVisible(
+        tester,
+        find.widgetWithText(OutlinedButton, 'Deletar notificação'),
+      );
+
+      expect(facade.loadCalls, 1);
+
+      await tester.tap(
+        find.widgetWithText(OutlinedButton, 'Deletar notificação'),
+      );
+      await tester.pumpAndSettle();
+
+      expect(facade.loadCalls, 1);
+      expect(facade.deleteCalls, <String>['notification-5']);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Falha ao deletar notificação'), findsOneWidget);
+      expect(
+        find.text('A requisição para `delete_notification` falhou.'),
+        findsOneWidget,
+      );
+      expect(find.text('Mensagem que falha ao deletar'), findsOneWidget);
+    });
   });
 }
 
@@ -194,6 +299,7 @@ class _FakeAllNotificationsFacade implements AllNotificationsFacade {
   _FakeAllNotificationsFacade({
     required this.initialNotifications,
     required this.updateResultBuilder,
+    required this.deleteResultBuilder,
   });
 
   final List<AllNotification> initialNotifications;
@@ -202,9 +308,12 @@ class _FakeAllNotificationsFacade implements AllNotificationsFacade {
     required bool isFinancialTransaction,
   })
   updateResultBuilder;
+  final DeleteNotificationResult Function({required String id})
+  deleteResultBuilder;
 
   int loadCalls = 0;
   final List<_UpdateCall> updateCalls = <_UpdateCall>[];
+  final List<String> deleteCalls = <String>[];
 
   @override
   Future<PaginatedAllNotifications> load(AllNotificationsQuery query) async {
@@ -226,6 +335,14 @@ class _FakeAllNotificationsFacade implements AllNotificationsFacade {
       id: id,
       isFinancialTransaction: isFinancialTransaction,
     );
+  }
+
+  @override
+  Future<DeleteNotificationResult> deleteNotification({
+    required String id,
+  }) async {
+    deleteCalls.add(id);
+    return deleteResultBuilder(id: id);
   }
 }
 
@@ -260,6 +377,23 @@ UpdateNotificationResult _buildUpdateResult({
     requestUrl: 'https://example.com/update_notification',
     requestBody:
         '{"id":"$id","is_financial_transaction":$isFinancialTransaction}',
+    responseStatusCode: responseStatusCode,
+    responseBody: responseBody,
+    responseErrorMessage: responseErrorMessage,
+  );
+}
+
+DeleteNotificationResult _buildDeleteResult({
+  required String id,
+  int responseStatusCode = 200,
+  String? responseBody,
+  String? responseErrorMessage,
+}) {
+  return DeleteNotificationResult(
+    notificationId: id,
+    requestMethod: 'DELETE',
+    requestUrl: 'https://example.com/delete_notification?id=$id',
+    requestQuery: 'id=$id',
     responseStatusCode: responseStatusCode,
     responseBody: responseBody,
     responseErrorMessage: responseErrorMessage,

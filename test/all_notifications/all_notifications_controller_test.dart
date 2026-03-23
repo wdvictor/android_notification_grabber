@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:notification_grabber/src/features/all_notifications/application/all_notifications_facade.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/all_notification.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/all_notifications_query.dart';
+import 'package:notification_grabber/src/features/all_notifications/domain/entities/delete_notification_result.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/paginated_all_notifications.dart';
 import 'package:notification_grabber/src/features/all_notifications/domain/entities/update_notification_result.dart';
 import 'package:notification_grabber/src/features/all_notifications/presentation/controllers/all_notifications_controller.dart';
@@ -158,6 +159,69 @@ void main() {
         expect(facade.updateCalls, 1);
       },
     );
+
+    test(
+      'remove do cache local quando delete_notification retorna sucesso sem recarregar a lista',
+      () async {
+        final facade = _FakeAllNotificationsFacade(
+          responsesByPage: <int, List<AllNotification>>{
+            1: _buildNotifications(3),
+          },
+          deleteResult: const DeleteNotificationResult(
+            notificationId: 'notification-1',
+            requestMethod: 'DELETE',
+            requestUrl:
+                'https://example.com/delete_notification?id=notification-1',
+            requestQuery: 'id=notification-1',
+            responseStatusCode: 204,
+          ),
+        );
+        final controller = AllNotificationsController(facade);
+
+        await controller.initialize();
+        final result = await controller.deleteNotification(
+          id: 'notification-1',
+        );
+
+        expect(result.isSuccess, isTrue);
+        expect(
+          controller.notifications.map((notification) => notification.id),
+          <String>['notification-0', 'notification-2'],
+        );
+        expect(facade.receivedQueries, hasLength(1));
+        expect(facade.deleteCalls, <String>['notification-1']);
+      },
+    );
+
+    test('mantem o cache local quando delete_notification falha', () async {
+      final facade = _FakeAllNotificationsFacade(
+        responsesByPage: <int, List<AllNotification>>{
+          1: _buildNotifications(3),
+        },
+        deleteResult: const DeleteNotificationResult(
+          notificationId: 'notification-1',
+          requestMethod: 'DELETE',
+          requestUrl:
+              'https://example.com/delete_notification?id=notification-1',
+          requestQuery: 'id=notification-1',
+          responseStatusCode: 500,
+          responseBody: '{"detail":"failed"}',
+          responseErrorMessage: 'delete_notification returned 500',
+        ),
+      );
+      final controller = AllNotificationsController(facade);
+
+      await controller.initialize();
+      final result = await controller.deleteNotification(id: 'notification-1');
+
+      expect(result.isSuccess, isFalse);
+      expect(
+        controller.notifications.map((notification) => notification.id),
+        <String>['notification-0', 'notification-1', 'notification-2'],
+      );
+      expect(facade.receivedQueries, hasLength(1));
+      expect(facade.deleteCalls, <String>['notification-1']);
+    });
   });
 }
 
@@ -165,6 +229,7 @@ class _FakeAllNotificationsFacade implements AllNotificationsFacade {
   _FakeAllNotificationsFacade({
     required Map<int, List<AllNotification>> responsesByPage,
     UpdateNotificationResult? updateResult,
+    DeleteNotificationResult? deleteResult,
   }) : _responsesByPage = responsesByPage,
        _updateResult =
            updateResult ??
@@ -175,12 +240,23 @@ class _FakeAllNotificationsFacade implements AllNotificationsFacade {
              requestUrl: 'https://example.com/update_notification',
              requestBody: '{}',
              responseStatusCode: 200,
+           ),
+       _deleteResult =
+           deleteResult ??
+           const DeleteNotificationResult(
+             notificationId: '',
+             requestMethod: 'DELETE',
+             requestUrl: 'https://example.com/delete_notification',
+             requestQuery: '',
+             responseStatusCode: 200,
            );
 
   final Map<int, List<AllNotification>> _responsesByPage;
   final UpdateNotificationResult _updateResult;
+  final DeleteNotificationResult _deleteResult;
   final List<AllNotificationsQuery> receivedQueries = <AllNotificationsQuery>[];
   int updateCalls = 0;
+  final List<String> deleteCalls = <String>[];
 
   @override
   Future<PaginatedAllNotifications> load(AllNotificationsQuery query) async {
@@ -198,6 +274,14 @@ class _FakeAllNotificationsFacade implements AllNotificationsFacade {
   }) async {
     updateCalls += 1;
     return _updateResult;
+  }
+
+  @override
+  Future<DeleteNotificationResult> deleteNotification({
+    required String id,
+  }) async {
+    deleteCalls.add(id);
+    return _deleteResult;
   }
 }
 

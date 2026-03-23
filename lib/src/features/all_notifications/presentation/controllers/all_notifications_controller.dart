@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../application/all_notifications_facade.dart';
 import '../../domain/entities/all_notification.dart';
 import '../../domain/entities/all_notifications_query.dart';
+import '../../domain/entities/delete_notification_result.dart';
 import '../../domain/entities/paginated_all_notifications.dart';
 import '../../domain/entities/update_notification_result.dart';
 
@@ -25,7 +26,7 @@ class AllNotificationsController extends ChangeNotifier {
   bool _initialized = false;
   bool _isLoading = false;
   String? _errorMessage;
-  Set<String> _updatingNotificationIds = const <String>{};
+  Set<String> _mutatingNotificationIds = const <String>{};
   FinancialTransactionFilterOption _selectedFilter =
       FinancialTransactionFilterOption.any;
   PaginatedAllNotifications _page = const PaginatedAllNotifications(
@@ -38,13 +39,13 @@ class AllNotificationsController extends ChangeNotifier {
   int get currentPage => _page.query.page;
   bool get hasPreviousPage => currentPage > 1;
   bool get hasNextPage => _page.hasNextPage;
-  bool get isUpdatingAnyNotification => _updatingNotificationIds.isNotEmpty;
+  bool get isUpdatingAnyNotification => _mutatingNotificationIds.isNotEmpty;
   String get currentSearchText => _page.query.normalizedSearchText ?? '';
   FinancialTransactionFilterOption get selectedFilter => _selectedFilter;
   List<AllNotification> get notifications => _page.items;
 
-  bool isUpdatingNotification(String id) {
-    return _updatingNotificationIds.contains(id);
+  bool isMutatingNotification(String id) {
+    return _mutatingNotificationIds.contains(id);
   }
 
   Future<void> initialize() async {
@@ -94,7 +95,7 @@ class AllNotificationsController extends ChangeNotifier {
     required String id,
     required bool isFinancialTransaction,
   }) async {
-    _updatingNotificationIds = {..._updatingNotificationIds, id};
+    _mutatingNotificationIds = {..._mutatingNotificationIds, id};
     notifyListeners();
 
     try {
@@ -126,8 +127,37 @@ class AllNotificationsController extends ChangeNotifier {
 
       return result;
     } finally {
-      _updatingNotificationIds = {
-        for (final currentId in _updatingNotificationIds)
+      _mutatingNotificationIds = {
+        for (final currentId in _mutatingNotificationIds)
+          if (currentId != id) currentId,
+      };
+      notifyListeners();
+    }
+  }
+
+  Future<DeleteNotificationResult> deleteNotification({
+    required String id,
+  }) async {
+    _mutatingNotificationIds = {..._mutatingNotificationIds, id};
+    notifyListeners();
+
+    try {
+      final result = await _facade.deleteNotification(id: id);
+
+      if (result.isSuccess) {
+        _page = PaginatedAllNotifications(
+          query: _page.query,
+          items: _page.items
+              .where((notification) => notification.id != id)
+              .toList(growable: false),
+        );
+        notifyListeners();
+      }
+
+      return result;
+    } finally {
+      _mutatingNotificationIds = {
+        for (final currentId in _mutatingNotificationIds)
           if (currentId != id) currentId,
       };
       notifyListeners();
